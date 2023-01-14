@@ -1,0 +1,22 @@
+filename = "samples/mosaic_dog.png"
+out_dir  = "out"
+imshow   = false
+
+[BilateralFilter]
+run         = false
+ksize       = 17
+sigma_space = 10.0
+sigma_color = 50.0
+
+[JointBilateralFilter]
+run         = false
+ksize       = 9
+sigma_space = 10.0
+sigma_color = 30.0
+
+[BilateralTextureFilter]
+run         = true
+run_cuda    = true
+ksize       = 9
+nitr        = 3
+debug_print = false
