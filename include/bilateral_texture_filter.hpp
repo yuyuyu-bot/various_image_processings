@@ -88,7 +88,7 @@ private:
             auto r_sum = 0;
 
             auto intensity_max = 0.f;
-            auto intensity_min = 0.f;
+            auto intensity_min = 256.f;
             auto magnitude_max = 0.f;
             auto magnitude_sum = 0.f;
 

@@ -24,11 +24,14 @@ inline __device__ T clamp(T v, T min, T max) {
 template <typename ImageType, typename MagnitudeType>
 __global__ void compute_magnitude_kernel(const ImageType* const image, MagnitudeType* const magnitude,
                                          const int width, const int height) {
-    const int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    const int x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int y = blockDim.y * blockIdx.y + threadIdx.y;
     const int stride_3ch = width * 3;
     const int stride = width;
-    const int x = idx % width;
-    const int y = idx / width;
+
+    if (x >= width || y >= height) {
+        return;
+    }
 
     if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
         magnitude[stride * y + x] = 0.f;
@@ -51,24 +54,64 @@ template <typename ImageType, typename MagnitudeType, typename BlurredType, type
 __global__ void compute_blur_and_rtv_kernel(const ImageType* const image, const MagnitudeType* const magnitude,
                                             BlurredType* const blurred, RTVType* const rtv, const int ksize,
                                             const int width, const int height) {
-    const int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    const int x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int y = blockDim.y * blockIdx.y + threadIdx.y;
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
     const int stride_3ch = width * 3;
     const int stride = width;
-    const int x = idx % width;
-    const int y = idx / width;
-    const int radius  = ksize / 2;
+    const int radius = ksize / 2;
 
-    const auto get_intensity = [image, stride_3ch](const int x0, const int y0) {
-        const auto pix = image + stride_3ch * y0 + x0 * 3;
-        return (pix[0] + pix[1] + pix[2]) / 3.f;
+    if (x >= width || y >= height) {
+        return;
+    }
+
+    // config of shared memory
+    const int smem_width    = blockDim.x + ksize - 1;
+    const int smem_height   = blockDim.y + ksize - 1;
+    const int smem_origin_x = x - tx - radius;
+    const int smem_origin_y = y - ty - radius;
+
+    // shared image
+    extern __shared__ ImageType s_image_magnitude_buffer[];
+    auto s_img = &s_image_magnitude_buffer[0];
+    const auto s_img_stride = smem_width * 3;
+    const auto get_s_img_ptr = [s_img, s_img_stride, smem_origin_x, smem_origin_y](const int img_x, const int img_y) {
+        const auto s_img_x = img_x - smem_origin_x;
+        const auto s_img_y = img_y - smem_origin_y;
+        return &s_img[s_img_stride * s_img_y + s_img_x * 3];
     };
+
+    // shared magnitude
+    auto s_mag = reinterpret_cast<MagnitudeType*>(&s_img[smem_width * smem_height * 3]);
+    const auto s_mag_stride = smem_width;
+    const auto get_s_mag_ptr = [s_mag, s_mag_stride, smem_origin_x, smem_origin_y](const int mag_x, const int mag_y) {
+        const auto s_mag_x = mag_x - smem_origin_x;
+        const auto s_mag_y = mag_y - smem_origin_y;
+        return &s_mag[s_mag_stride * s_mag_y + s_mag_x];
+    };
+
+    // copy global data to shared memory
+    for (int y_offset = ty; y_offset < smem_height; y_offset += blockDim.y) {
+        for (int x_offset = tx; x_offset < smem_width; x_offset += blockDim.x) {
+            auto* const s_img_ptr = get_s_img_ptr(smem_origin_x + x_offset, smem_origin_y + y_offset);
+            auto* const s_mag_ptr = get_s_mag_ptr(smem_origin_x + x_offset, smem_origin_y + y_offset);
+            const auto x_clamped = clamp(smem_origin_x + x_offset, 0, width - 1);
+            const auto y_clamped = clamp(smem_origin_y + y_offset, 0, height - 1);
+            s_img_ptr[0] = image[stride_3ch * y_clamped + x_clamped * 3 + 0];
+            s_img_ptr[1] = image[stride_3ch * y_clamped + x_clamped * 3 + 1];
+            s_img_ptr[2] = image[stride_3ch * y_clamped + x_clamped * 3 + 2];
+            *s_mag_ptr   = magnitude[stride * y_clamped + x_clamped];
+        }
+    }
+    __syncthreads();
 
     auto sum0 = 0;
     auto sum1 = 0;
     auto sum2 = 0;
 
     auto intensity_max = 0.f;
-    auto intensity_min = 0.f;
+    auto intensity_min = 256.f;
     auto magnitude_max = 0.f;
     auto magnitude_sum = 0.f;
 
@@ -77,14 +120,18 @@ __global__ void compute_blur_and_rtv_kernel(const ImageType* const image, const 
             const auto x_clamped = clamp(x + kx, 0, width - 1);
             const auto y_clamped = clamp(y + ky, 0, height - 1);
 
-            sum0 += image[stride_3ch * y_clamped + x_clamped * 3 + 0];
-            sum1 += image[stride_3ch * y_clamped + x_clamped * 3 + 1];
-            sum2 += image[stride_3ch * y_clamped + x_clamped * 3 + 2];
+            const auto s_img_ptr = get_s_img_ptr(x + kx, y + ky);
+            sum0 += s_img_ptr[0];
+            sum1 += s_img_ptr[1];
+            sum2 += s_img_ptr[2];
 
-            intensity_max  = max(intensity_max, get_intensity(x_clamped, y_clamped));
-            intensity_min  = min(intensity_min, get_intensity(x_clamped, y_clamped));
-            magnitude_max  = max(magnitude_max, magnitude[stride * y_clamped + x_clamped]);
-            magnitude_sum += magnitude[stride * y_clamped + x_clamped];
+            const auto intensity = (s_img_ptr[0] + s_img_ptr[1] + s_img_ptr[2]) / 3.f;
+            intensity_max  = max(intensity_max, intensity);
+            intensity_min  = min(intensity_min, intensity);
+
+            const auto mag = *get_s_mag_ptr(x + kx, y + ky);
+            magnitude_max  = max(magnitude_max, mag);
+            magnitude_sum += mag;
         }
     }
 
@@ -143,21 +190,15 @@ __global__ void joint_bilateral_filter_kernel(const ImageType* const src, const 
     const int y = idx / width;
     const auto radius  = ksize / 2;
 
-    extern __shared__ float s_buffer[];
-    float* s_kernel_space = &s_buffer[0];
-    float* s_kernel_color_table = &s_buffer[ksize * ksize];
+    extern __shared__ float s_kernel_buffer[];
+    auto s_kernel_space       = &s_kernel_buffer[0];
+    auto s_kernel_color_table = &s_kernel_buffer[ksize * ksize];
 
-    const auto num_copy_elems_kernel_space = (ksize * ksize + blockDim.x - 1) / blockDim.x;
-    const auto num_copy_elems_kernel_color = (256 * 3 + blockDim.x - 1) / blockDim.x;
-    for (int i = 0; i < num_copy_elems_kernel_space; i++) {
-        if (num_copy_elems_kernel_space * threadIdx.x + i < ksize * ksize) {
-            s_kernel_space[num_copy_elems_kernel_space * threadIdx.x + i] = kernel_space[num_copy_elems_kernel_space * threadIdx.x + i];
-        }
+    for (int i = threadIdx.x; i < ksize * ksize; i += blockDim.x) {
+        s_kernel_space[i] = kernel_space[i];
     }
-    for (int i = 0; i < num_copy_elems_kernel_color; i++) {
-        if (num_copy_elems_kernel_color * threadIdx.x + i < ksize * ksize) {
-            s_kernel_color_table[num_copy_elems_kernel_color * threadIdx.x + i] = kernel_color_table[num_copy_elems_kernel_color * threadIdx.x + i];
-        }
+    for (int i = threadIdx.x; i < 256 * 3; i += blockDim.x) {
+        s_kernel_color_table[i] = kernel_color_table[i];
     }
     __syncthreads();
 
@@ -169,7 +210,6 @@ __global__ void joint_bilateral_filter_kernel(const ImageType* const src, const 
         const auto diff0 = static_cast<int>(a[0]) - static_cast<int>(b[0]);
         const auto diff1 = static_cast<int>(a[1]) - static_cast<int>(b[1]);
         const auto diff2 = static_cast<int>(a[2]) - static_cast<int>(b[2]);
-        // const auto color_distance = (diff0 * diff0 + diff1 * diff1 + diff2 * diff2) / 3;
         const auto color_distance = abs(diff0) + abs(diff1) + abs(diff2);
         return s_kernel_color_table[color_distance];
     };
@@ -235,8 +275,14 @@ private:
     template <typename MagnitudeType>
     void compute_magnitude(const thrust::device_vector<ElemType>& d_image,
                            thrust::device_vector<MagnitudeType>& d_magnitude) {
-        const dim3 grid_dim{static_cast<::std::uint32_t>(height_)};
-        const dim3 block_dim{static_cast<::std::uint32_t>(width_)};
+        const ::std::uint32_t block_width  = 32u;
+        const ::std::uint32_t block_height = 32u;
+        const ::std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
+        const ::std::uint32_t grid_height  = (height_ + block_height - 1) / block_height;
+
+        const dim3 grid_dim (grid_width, grid_height);
+        const dim3 block_dim(block_width, block_height);
+
         compute_magnitude_kernel<<<grid_dim, block_dim>>>(
             d_image.data().get(), d_magnitude.data().get(), width_, height_);
         CUDASafeCall();
@@ -246,9 +292,18 @@ private:
     void compute_blur_and_rtv(const thrust::device_vector<ElemType>& d_image,
                               const thrust::device_vector<MagnitudeType>& d_magnitude,
                               thrust::device_vector<BlurredType>& d_blurred, thrust::device_vector<RTVType>& d_rtv) {
-        const dim3 grid_dim{static_cast<::std::uint32_t>(height_)};
-        const dim3 block_dim{static_cast<::std::uint32_t>(width_)};
-        compute_blur_and_rtv_kernel<<<grid_dim, block_dim>>>(
+        const ::std::uint32_t block_width  = 16u;
+        const ::std::uint32_t block_height = 8u;
+        const ::std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
+        const ::std::uint32_t grid_height  = (height_ + block_height - 1) / block_height;
+
+        const dim3 grid_dim (grid_width, grid_height);
+        const dim3 block_dim(block_width, block_height);
+        const::std::uint32_t smem_size =
+            (block_width + ksize_ - 1) * (block_height + ksize_ - 1) * 3 * sizeof(ElemType) +
+            (block_width + ksize_ - 1) * (block_height + ksize_ - 1) * sizeof(MagnitudeType);
+
+        compute_blur_and_rtv_kernel<<<grid_dim, block_dim, smem_size>>>(
             d_image.data().get(), d_magnitude.data().get(), d_blurred.data().get(), d_rtv.data().get(), ksize_,
             width_, height_);
         CUDASafeCall();
