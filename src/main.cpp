@@ -9,6 +9,9 @@
 #include "bilateral_filter.hpp"
 #include "bilateral_texture_filter.hpp"
 
+#include "cuda/device_image.hpp"
+#include "cuda/bilateral_texture_filter.hpp"
+
 struct Args {
     std::string filename;
     std::string out_dir;
@@ -132,10 +135,18 @@ int main(int argc, char** argv) {
     // cuda bilateral texture filter
     if (args.bilateral_texture_filter.run_cuda) {
         std::cout << "cuda bilateral texture filter" << std::endl;
-        cv::Mat3b dst;
-        cuda::bilateral_texture_filter(
-            input_image, dst, args.bilateral_texture_filter.ksize, args.bilateral_texture_filter.nitr,
-            args.bilateral_texture_filter.debug_print);
+
+        cuda::DeviceImage<std::uint8_t> d_input_image(input_image.cols, input_image.rows, 3);
+        cuda::DeviceImage<std::uint8_t> d_dst(input_image.cols, input_image.rows, 3);
+        d_input_image.upload(input_image.ptr<std::uint8_t>());
+
+        cuda::BilateralTextureFilter filter(input_image.cols, input_image.rows, args.bilateral_texture_filter.ksize,
+                                            args.bilateral_texture_filter.nitr);
+        filter.execute(d_input_image.get(), d_dst.get());
+
+        cv::Mat3b dst(input_image.size());
+        d_dst.download(dst.ptr<std::uint8_t>());
+
         if (args.imshow) {
             cv::imshow("cuda bilateral texture filter", dst);
         }

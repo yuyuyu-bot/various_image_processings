@@ -6,8 +6,7 @@
 #include <iostream>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
-
-#include "bilateral_filter.hpp"
+#include <opencv2/ximgproc/edge_filter.hpp>
 
 class BilateralTextureFilterImpl {
 public:
@@ -31,7 +30,8 @@ public:
             compute_guide(blurred_, rtv_, ksize, guide_);
 
             if (debug_print) { std::cout << "\tapply joint bilateral filter ..." << std::endl; }
-            joint_bilateral_filter(src_n, guide_, dst, 2 * ksize - 1, ksize - 1, 0.05 * std::sqrt(3));
+            cv::ximgproc::jointBilateralFilter(guide_, src_n, dst, 2 * ksize - 1, std::sqrt(3), ksize - 1);
+            // joint_bilateral_filter(src_n, guide_, dst, 2 * ksize - 1, ksize - 1, 0.05 * std::sqrt(3));
         }
     }
 
@@ -155,11 +155,6 @@ private:
     }
 
     void compute_guide(const cv::Mat3f& blurred, const cv::Mat1f& rtv, const int ksize, cv::Mat3b& guide) {
-        const auto width  = blurred.cols;
-        const auto height = blurred.rows;
-        const auto khalf  = ksize / 2;
-        const auto sigma_alpha = 1.f / (5 * ksize);
-
         guide.create(blurred.size());
 
         for (int y = 0; y < guide.rows; y++) {
@@ -187,11 +182,5 @@ inline void bilateral_texture_filter(const cv::Mat3b& src, cv::Mat3b& dst, const
 }
 
 } // anonymous namespace
-
-namespace cuda {
-
-void bilateral_texture_filter(const cv::Mat3b&, cv::Mat3b&, const int, const int, const bool);
-
-} // namespace cuda
 
 #endif // BILATERAL_TEXTURE_FILTER_HPP

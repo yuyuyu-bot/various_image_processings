@@ -2,9 +2,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
-#include "bilateral_texture_filter.hpp"
-
-
+#include "cuda/bilateral_texture_filter.hpp"
 
 #define CUDASafeCall() cuda_safe_call(cudaGetLastError(), __FILE__, __LINE__);
 
@@ -58,7 +56,7 @@ __global__ void compute_blur_and_rtv_kernel(const ImageType* const image, const 
     const int stride = width;
     const int x = idx % width;
     const int y = idx / width;
-    const int khalf  = ksize / 2;
+    const int radius  = ksize / 2;
 
     const auto get_intensity = [image, stride_3ch](const int x0, const int y0) {
         const auto pix = image + stride_3ch * y0 + x0 * 3;
@@ -71,11 +69,11 @@ __global__ void compute_blur_and_rtv_kernel(const ImageType* const image, const 
 
     auto intensity_max = 0.f;
     auto intensity_min = 0.f;
-    auto magnitude_max      = 0.f;
-    auto magnitude_sum      = 0.f;
+    auto magnitude_max = 0.f;
+    auto magnitude_sum = 0.f;
 
-    for (int ky = -khalf; ky <= khalf; ky++) {
-        for (int kx = -khalf; kx <= khalf; kx++) {
+    for (int ky = -radius; ky <= radius; ky++) {
+        for (int kx = -radius; kx <= radius; kx++) {
             const auto x_clamped = clamp(x + kx, 0, width - 1);
             const auto y_clamped = clamp(y + ky, 0, height - 1);
 
@@ -104,15 +102,15 @@ __global__ void compute_guide_kernel(const BlurredType* const blurred, const RTV
     const int stride = width;
     const int x = idx % width;
     const int y = idx / width;
-    const auto khalf  = ksize / 2;
+    const auto radius  = ksize / 2;
     const auto sigma_alpha = 1.f / (5 * ksize);
 
     auto rtv_min = 1e10f;
     auto rtv_min_x = 0;
     auto rtv_min_y = 0;
 
-    for (int ky = -khalf; ky <= khalf; ky++) {
-        for (int kx = -khalf; kx <= khalf; kx++) {
+    for (int ky = -radius; ky <= radius; ky++) {
+        for (int kx = -radius; kx <= radius; kx++) {
             const auto x_clamped = clamp(x + kx, 0, width - 1);
             const auto y_clamped = clamp(y + ky, 0, height - 1);
 
@@ -143,17 +141,18 @@ __global__ void joint_bilateral_filter_kernel(const ImageType* const src, const 
     const int stride_3ch = width * 3;
     const int x = idx % width;
     const int y = idx / width;
-    const auto khalf  = ksize / 2;
+    const auto radius  = ksize / 2;
 
-    const auto get_kernel_space = [ksize, khalf, kernel_space](const int kx, const int ky) {
-        return kernel_space[(ky + khalf) * ksize + (kx + khalf)];
+    const auto get_kernel_space = [ksize, radius, kernel_space](const int kx, const int ky) {
+        return kernel_space[(ky + radius) * ksize + (kx + radius)];
     };
 
     const auto get_kernel_color = [kernel_color_table](const auto a, const auto b) {
         const auto diff0 = static_cast<int>(a[0]) - static_cast<int>(b[0]);
         const auto diff1 = static_cast<int>(a[1]) - static_cast<int>(b[1]);
         const auto diff2 = static_cast<int>(a[2]) - static_cast<int>(b[2]);
-        const auto color_distance = (diff0 * diff0 + diff1 * diff1 + diff2 * diff2) / 3;
+        // const auto color_distance = (diff0 * diff0 + diff1 * diff1 + diff2 * diff2) / 3;
+        const auto color_distance = abs(diff0) + abs(diff1) + abs(diff2);
         return kernel_color_table[color_distance];
     };
 
@@ -163,8 +162,8 @@ __global__ void joint_bilateral_filter_kernel(const ImageType* const src, const 
     auto sum2 = 0.f;
     auto sum_k = 0.f;
 
-    for (int ky = -khalf; ky <= khalf; ky++) {
-        for (int kx = -khalf; kx <= khalf; kx++) {
+    for (int ky = -radius; ky <= radius; ky++) {
+        for (int kx = -radius; kx <= radius; kx++) {
             const auto x_clamped = clamp(x + kx, 0, width - 1);
             const auto y_clamped = clamp(y + ky, 0, height - 1);
             const auto pix       = src + stride_3ch * y_clamped + x_clamped * 3;
@@ -183,106 +182,100 @@ __global__ void joint_bilateral_filter_kernel(const ImageType* const src, const 
     dst[stride_3ch * y + x * 3 + 2] = static_cast<ImageType>(sum2 / sum_k);
 }
 
-#include "debug_show.hpp"
-class CudaBilateralTextureFilterImpl {
+namespace cuda {
+
+class BilateralTextureFilter::Impl {
 public:
-    CudaBilateralTextureFilterImpl(const int width, const int height) : width_(width), height_(height) {
-        d_src_n_     = thrust::device_vector<std::uint8_t>(width_ * height_ * 3);
+    Impl(const int width, const int height, const int ksize = 9, const int nitr = 3)
+    : width_(width), height_(height), ksize_(ksize), nitr_(nitr), sigma_space_(ksize - 1), sigma_color_(jbf_sigma_color) {
+        d_src_n_     = thrust::device_vector<ElemType>(width_ * height_ * 3);
+        d_dst_n_     = thrust::device_vector<ElemType>(width_ * height_ * 3);
         d_blurred_   = thrust::device_vector<float>(width_ * height_ * 3);
         d_magnitude_ = thrust::device_vector<float>(width_ * height_);
         d_rtv_       = thrust::device_vector<float>(width_ * height_);
-        d_guide_     = thrust::device_vector<std::uint8_t>(width_ * height_ * 3);
+        d_guide_     = thrust::device_vector<ElemType>(width_ * height_ * 3);
     }
 
-    ~CudaBilateralTextureFilterImpl() {}
+    ~Impl() {}
 
-    template <typename ImageType>
-    void execute(const thrust::device_vector<ImageType>& d_src, thrust::device_vector<ImageType>& d_dst,
-                 const int ksize, const int nitr = 3, const bool debug_print = false) {
-        thrust::copy(d_src.begin(), d_src.end(), d_dst.begin());
+    void execute(const ElemType* const d_src, ElemType* const d_dst) {
+        thrust::copy(d_src, d_src + width_ * height_ * 3, d_dst_n_.begin());
 
-        for (int itr = 0; itr < nitr; itr++) {
-            if (debug_print) { std::cout << cv::format("itration %d", itr + 1) << std::endl; }
-
-            thrust::copy(d_dst.begin(), d_dst.end(), d_src_n_.begin());
-
-            if (debug_print) { std::cout << "\tcompute magnitude ..." << std::endl; }
+        for (int itr = 0; itr < nitr_; itr++) {
+            thrust::copy(d_dst_n_.begin(), d_dst_n_.end(), d_src_n_.begin());
             compute_magnitude(d_src_n_, d_magnitude_);
-
-            if (debug_print) { std::cout << "\tcompute rtv ..." << std::endl; }
-            compute_blur_and_rtv(d_src_n_, d_magnitude_, d_blurred_, d_rtv_, ksize);
-
-            if (debug_print) { std::cout << "\tcompute guide ..." << std::endl; }
-            compute_guide(d_blurred_, d_rtv_, d_guide_, ksize);
-
-            if (debug_print) { std::cout << "\tapply joint bilateral filter ..." << std::endl; }
-            joint_bilateral_filter(d_src_n_, d_guide_, d_dst, 2 * ksize - 1, ksize - 1, jbf_sigma_color);
+            compute_blur_and_rtv(d_src_n_, d_magnitude_, d_blurred_, d_rtv_);
+            compute_guide(d_blurred_, d_rtv_, d_guide_);
+            joint_bilateral_filter(d_src_n_, d_guide_, d_dst_n_, 2 * ksize_ - 1, sigma_space_, sigma_color_);
         }
 
         cudaDeviceSynchronize();
+        thrust::copy(d_dst_n_.begin(), d_dst_n_.end(), d_dst);
     }
 
-
 private:
-    using ElemType = std::uint8_t;
-
-    template <typename ImageType, typename MagnitudeType>
-    void compute_magnitude(const thrust::device_vector<ImageType>& d_image,
+    template <typename MagnitudeType>
+    void compute_magnitude(const thrust::device_vector<ElemType>& d_image,
                            thrust::device_vector<MagnitudeType>& d_magnitude) {
-        const dim3 grid_dim{static_cast<std::uint32_t>(height_)};
-        const dim3 block_dim{static_cast<std::uint32_t>(width_)};
+        const dim3 grid_dim{static_cast<::std::uint32_t>(height_)};
+        const dim3 block_dim{static_cast<::std::uint32_t>(width_)};
         compute_magnitude_kernel<<<grid_dim, block_dim>>>(
             d_image.data().get(), d_magnitude.data().get(), width_, height_);
         CUDASafeCall();
     }
 
-    template <typename ImageType, typename MagnitudeType, typename BlurredType, typename RTVType>
-    void compute_blur_and_rtv(const thrust::device_vector<ImageType>& d_image,
+    template <typename MagnitudeType, typename BlurredType, typename RTVType>
+    void compute_blur_and_rtv(const thrust::device_vector<ElemType>& d_image,
                               const thrust::device_vector<MagnitudeType>& d_magnitude,
-                              thrust::device_vector<BlurredType>& d_blurred, thrust::device_vector<RTVType>& d_rtv,
-                              const int ksize) {
-        const dim3 grid_dim{static_cast<std::uint32_t>(height_)};
-        const dim3 block_dim{static_cast<std::uint32_t>(width_)};
+                              thrust::device_vector<BlurredType>& d_blurred, thrust::device_vector<RTVType>& d_rtv) {
+        const dim3 grid_dim{static_cast<::std::uint32_t>(height_)};
+        const dim3 block_dim{static_cast<::std::uint32_t>(width_)};
         compute_blur_and_rtv_kernel<<<grid_dim, block_dim>>>(
-            d_image.data().get(), d_magnitude.data().get(), d_blurred.data().get(), d_rtv.data().get(), ksize,
+            d_image.data().get(), d_magnitude.data().get(), d_blurred.data().get(), d_rtv.data().get(), ksize_,
             width_, height_);
         CUDASafeCall();
     }
 
     template <typename BlurredType, typename RTVType, typename GuideType>
     void compute_guide(const thrust::device_vector<BlurredType>& d_blurred, const thrust::device_vector<RTVType>& d_rtv,
-                       thrust::device_vector<GuideType>& d_guide, const int ksize) {
-        const dim3 grid_dim{static_cast<std::uint32_t>(height_)};
-        const dim3 block_dim{static_cast<std::uint32_t>(width_)};
+                       thrust::device_vector<GuideType>& d_guide) {
+        const dim3 grid_dim{static_cast<::std::uint32_t>(height_)};
+        const dim3 block_dim{static_cast<::std::uint32_t>(width_)};
         compute_guide_kernel<<<grid_dim, block_dim>>>(
-            d_blurred.data().get(), d_rtv.data().get(), d_guide.data().get(), ksize, width_, height_);
+            d_blurred.data().get(), d_rtv.data().get(), d_guide.data().get(), ksize_, width_, height_);
         CUDASafeCall();
     }
 
-    template <typename ImageType, typename GuideType>
-    void joint_bilateral_filter(const thrust::device_vector<ImageType>& d_src,
+    template <typename GuideType>
+    void joint_bilateral_filter(const thrust::device_vector<ElemType>& d_src,
                                 const thrust::device_vector<GuideType>& d_guide,
-                                thrust::device_vector<ImageType>& d_dst,
+                                thrust::device_vector<ElemType>& d_dst,
                                 const int ksize, const float sigma_space, const float sigma_color) {
-        const auto khalf  = ksize / 2;
+        const double gauss_color_coeff = -1.0 / (2 * sigma_color * sigma_color);
+        const double gauss_space_coeff = -1.0 / (2 * sigma_space * sigma_space);
+        const auto radius  = ksize / 2;
 
-        thrust::host_vector<float> h_kernel_space(ksize * ksize);
-        for (int ky = -khalf; ky <= khalf; ky++) {
-            for (int kx = -khalf; kx <= khalf; kx++) {
-                const auto kidx = (ky + khalf) * ksize + (kx + khalf);
-                h_kernel_space[kidx] = std::exp(-(kx * kx + ky * ky) / (2 * sigma_space * sigma_space));
+        thrust::host_vector<float> h_kernel_space(ksize * ksize, 0.f);
+        for (int ky = -radius; ky <= radius; ky++) {
+            for (int kx = -radius; kx <= radius; kx++) {
+                const auto kidx = (ky + radius) * ksize + (kx + radius);
+                const auto r2 = kx * kx + ky * ky;
+                if (r2 > radius * radius) {
+                    continue;
+                }
+                h_kernel_space[kidx] = ::std::exp(r2 * gauss_space_coeff);
             }
         }
         thrust::device_vector<float> kernel_space = h_kernel_space;
 
-        thrust::host_vector<float> h_kernel_color_table(255 * 255);
+        thrust::host_vector<float> h_kernel_color_table(256 * 3);
         for (int i = 0; i < h_kernel_color_table.size(); i++) {
-            h_kernel_color_table[i] = std::exp(-i / (2 * sigma_color * sigma_color));
+            h_kernel_color_table[i] = ::std::exp((i * i) * gauss_color_coeff);
         }
         thrust::device_vector<float> kernel_color_table = h_kernel_color_table;
 
-        const dim3 grid_dim{static_cast<std::uint32_t>(height_)};
-        const dim3 block_dim{static_cast<std::uint32_t>(width_)};
+        const dim3 grid_dim{static_cast<::std::uint32_t>(height_)};
+        const dim3 block_dim{static_cast<::std::uint32_t>(width_)};
         joint_bilateral_filter_kernel<<<grid_dim, block_dim>>>(
             d_src.data().get(), d_guide.data().get(), d_dst.data().get(), ksize, kernel_space.data().get(),
             kernel_color_table.data().get(), width_, height_);
@@ -290,34 +283,35 @@ private:
     }
 
 private:
-    static constexpr auto jbf_sigma_color = 0.05f * 1.73205080757f; // 0.05 * sqrt(3)
+    // static constexpr auto jbf_sigma_color = 0.05f * 1.73205080757f; // 0.05 * sqrt(3)
+    static constexpr auto jbf_sigma_color = 1.73205080757f; // sqrt(3)
 
-    const int width_;
-    const int height_;
+    const int   width_;
+    const int   height_;
+    const int   ksize_;
+    const int   nitr_;
+    const float sigma_space_;
+    const float sigma_color_;
 
-    thrust::device_vector<std::uint8_t> d_src_n_;
-    thrust::device_vector<float>        d_blurred_;
-    thrust::device_vector<float>        d_magnitude_;
-    thrust::device_vector<float>        d_rtv_;
-    thrust::device_vector<std::uint8_t> d_guide_;
+    thrust::device_vector<ElemType> d_src_n_;
+    thrust::device_vector<ElemType> d_dst_n_;
+    thrust::device_vector<float>    d_blurred_;
+    thrust::device_vector<float>    d_magnitude_;
+    thrust::device_vector<float>    d_rtv_;
+    thrust::device_vector<ElemType> d_guide_;
 };
 
-namespace cuda {
+BilateralTextureFilter::BilateralTextureFilter(const int width, const int height, const int ksize, const int nitr) {
+    impl_ = new BilateralTextureFilter::Impl(width, height, ksize, nitr);
+}
 
-void bilateral_texture_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksize = 9, const int nitr = 3,
-                                     const bool debug_print = false) {
-    const auto width  = src.cols;
-    const auto height = src.rows;
+BilateralTextureFilter::~BilateralTextureFilter() {
+    delete impl_;
+}
 
-    ::thrust::device_vector<::std::uint8_t> d_src(width * height * 3);
-    ::thrust::device_vector<::std::uint8_t> d_dst(width * height * 3);
-    ::thrust::copy(src.ptr<::std::uint8_t>(), src.ptr<::std::uint8_t>() + width * height * 3, d_src.begin());
-
-    CudaBilateralTextureFilterImpl impl(width, height);
-    impl.execute(d_src, d_dst, ksize, nitr, debug_print);
-
-    dst.create(src.size());
-    ::thrust::copy(d_dst.begin(), d_dst.end(), dst.ptr<::std::uint8_t>());
+void BilateralTextureFilter::execute(const ElemType* const d_src, ElemType* const d_dst) {
+    impl_->execute(d_src, d_dst);
+    cudaDeviceSynchronize();
 }
 
 } // namespace cuda
