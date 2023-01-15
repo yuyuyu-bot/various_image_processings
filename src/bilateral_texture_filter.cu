@@ -251,8 +251,8 @@ private:
                                 const thrust::device_vector<GuideType>& d_guide,
                                 thrust::device_vector<ElemType>& d_dst,
                                 const int ksize, const float sigma_space, const float sigma_color) {
-        const double gauss_color_coeff = -1.0 / (2 * sigma_color * sigma_color);
-        const double gauss_space_coeff = -1.0 / (2 * sigma_space * sigma_space);
+        const auto gauss_color_coeff = -1.f / (2 * sigma_color * sigma_color);
+        const auto gauss_space_coeff = -1.f / (2 * sigma_space * sigma_space);
         const auto radius  = ksize / 2;
 
         thrust::host_vector<float> h_kernel_space(ksize * ksize, 0.f);

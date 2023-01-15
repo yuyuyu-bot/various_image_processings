@@ -19,4 +19,3 @@ run         = true
 run_cuda    = true
 ksize       = 9
 nitr        = 3
-debug_print = true

@@ -12,6 +12,8 @@
 #include "cuda/device_image.hpp"
 #include "cuda/bilateral_texture_filter.hpp"
 
+void benchmark(const cv::Mat3b& input_image);
+
 struct Args {
     std::string filename;
     std::string out_dir;
@@ -36,7 +38,6 @@ struct Args {
         bool run_cuda;
         int  ksize;
         int  nitr;
-        bool debug_print;
     } bilateral_texture_filter;
 };
 
@@ -72,7 +73,6 @@ auto parse_args(const std::string& toml_filename) {
         args.bilateral_texture_filter.run_cuda    = toml::find<bool>(data, "run_cuda");
         args.bilateral_texture_filter.ksize       = toml::find<int>(data, "ksize");
         args.bilateral_texture_filter.nitr        = toml::find<int>(data, "nitr");
-        args.bilateral_texture_filter.debug_print = toml::find<bool>(data, "debug_print");
     }
 
     return args;
@@ -124,8 +124,7 @@ int main(int argc, char** argv) {
         std::cout << "bilateral texture filter" << std::endl;
         cv::Mat3b dst;
         bilateral_texture_filter(
-            input_image, dst, args.bilateral_texture_filter.ksize, args.bilateral_texture_filter.nitr,
-            args.bilateral_texture_filter.debug_print);
+            input_image, dst, args.bilateral_texture_filter.ksize, args.bilateral_texture_filter.nitr);
         if (args.imshow) {
             cv::imshow("bilateral texture filter", dst);
         }
@@ -159,6 +158,8 @@ int main(int argc, char** argv) {
             break;
         }
     }
+
+    benchmark(input_image);
 
     return 0;
 }
