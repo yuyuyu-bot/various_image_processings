@@ -45,7 +45,7 @@ static void bench_bilateral_texture_filter(const cv::Mat3b& input_image, const i
     std::int64_t sum_duration_cuda = 0ll;
     for (int i = 0; i <= measurent_times; i++) {
         const auto start_ref = std::chrono::system_clock::now();
-        bilateral_texture_filter(input_image, dst_ref, ksize, nitr);
+        // bilateral_texture_filter(input_image, dst_ref, ksize, nitr);
         const auto end_ref = std::chrono::system_clock::now();
 
         const auto start_cuda = std::chrono::system_clock::now();
@@ -53,12 +53,12 @@ static void bench_bilateral_texture_filter(const cv::Mat3b& input_image, const i
         const auto end_cuda = std::chrono::system_clock::now();
 
         if (i != 0) {
-            sum_duration_ref  += std::chrono::duration_cast<std::chrono::milliseconds>(end_ref - start_ref).count();
-            sum_duration_cuda += std::chrono::duration_cast<std::chrono::milliseconds>(end_cuda - start_cuda).count();
+            sum_duration_ref  += std::chrono::duration_cast<std::chrono::microseconds>(end_ref - start_ref).count();
+            sum_duration_cuda += std::chrono::duration_cast<std::chrono::microseconds>(end_cuda - start_cuda).count();
         }
     }
-    std::cout << "duration ref  : " << sum_duration_ref / measurent_times << " [msec]" << std::endl;
-    std::cout << "duration cuda : " << sum_duration_cuda / measurent_times << " [msec]" << std::endl;
+    std::cout << "duration ref  : " << sum_duration_ref / measurent_times / 1000.f << " [msec]" << std::endl;
+    std::cout << "duration cuda : " << sum_duration_cuda / measurent_times / 1000.f << " [msec]" << std::endl;
 
     compare(dst_ref, dst_cuda, ksize / 2);
 }

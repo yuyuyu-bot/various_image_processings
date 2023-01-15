@@ -143,17 +143,35 @@ __global__ void joint_bilateral_filter_kernel(const ImageType* const src, const 
     const int y = idx / width;
     const auto radius  = ksize / 2;
 
-    const auto get_kernel_space = [ksize, radius, kernel_space](const int kx, const int ky) {
-        return kernel_space[(ky + radius) * ksize + (kx + radius)];
+    extern __shared__ float s_buffer[];
+    float* s_kernel_space = &s_buffer[0];
+    float* s_kernel_color_table = &s_buffer[ksize * ksize];
+
+    const auto num_copy_elems_kernel_space = (ksize * ksize + blockDim.x - 1) / blockDim.x;
+    const auto num_copy_elems_kernel_color = (256 * 3 + blockDim.x - 1) / blockDim.x;
+    for (int i = 0; i < num_copy_elems_kernel_space; i++) {
+        if (num_copy_elems_kernel_space * threadIdx.x + i < ksize * ksize) {
+            s_kernel_space[num_copy_elems_kernel_space * threadIdx.x + i] = kernel_space[num_copy_elems_kernel_space * threadIdx.x + i];
+        }
+    }
+    for (int i = 0; i < num_copy_elems_kernel_color; i++) {
+        if (num_copy_elems_kernel_color * threadIdx.x + i < ksize * ksize) {
+            s_kernel_color_table[num_copy_elems_kernel_color * threadIdx.x + i] = kernel_color_table[num_copy_elems_kernel_color * threadIdx.x + i];
+        }
+    }
+    __syncthreads();
+
+    const auto get_kernel_space = [ksize, radius, s_kernel_space](const int kx, const int ky) {
+        return s_kernel_space[(ky + radius) * ksize + (kx + radius)];
     };
 
-    const auto get_kernel_color = [kernel_color_table](const auto a, const auto b) {
+    const auto get_kernel_color = [s_kernel_color_table](const auto a, const auto b) {
         const auto diff0 = static_cast<int>(a[0]) - static_cast<int>(b[0]);
         const auto diff1 = static_cast<int>(a[1]) - static_cast<int>(b[1]);
         const auto diff2 = static_cast<int>(a[2]) - static_cast<int>(b[2]);
         // const auto color_distance = (diff0 * diff0 + diff1 * diff1 + diff2 * diff2) / 3;
         const auto color_distance = abs(diff0) + abs(diff1) + abs(diff2);
-        return kernel_color_table[color_distance];
+        return s_kernel_color_table[color_distance];
     };
 
     const auto guide_center_pix = guide + stride_3ch * y + x * 3;
@@ -276,7 +294,8 @@ private:
 
         const dim3 grid_dim{static_cast<::std::uint32_t>(height_)};
         const dim3 block_dim{static_cast<::std::uint32_t>(width_)};
-        joint_bilateral_filter_kernel<<<grid_dim, block_dim>>>(
+        const ::std::uint32_t smem_size = (kernel_space.size() + kernel_color_table.size()) * sizeof(float);
+        joint_bilateral_filter_kernel<<<grid_dim, block_dim, smem_size>>>(
             d_src.data().get(), d_guide.data().get(), d_dst.data().get(), ksize, kernel_space.data().get(),
             kernel_color_table.data().get(), width_, height_);
         CUDASafeCall();
