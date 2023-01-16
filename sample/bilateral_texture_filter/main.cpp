@@ -3,7 +3,7 @@
 
 #include "cuda/device_image.hpp"
 
-#include "bilateral_texture_filter.hpp"
+#include "cpp/bilateral_texture_filter.hpp"
 #include "cuda/bilateral_texture_filter.hpp"
 
 int main(int argc, char** argv) {
@@ -27,9 +27,9 @@ int main(int argc, char** argv) {
     bilateral_texture_filter(input_image, dst_cpp, ksize, nitr);
 
     // cuda
-    cuda::DeviceImage<std::uint8_t> d_input_image(input_image.cols, input_image.rows, 3);
-    cuda::DeviceImage<std::uint8_t> d_dst(input_image.cols, input_image.rows, 3);
-    cuda::BilateralTextureFilter filter(input_image.cols, input_image.rows, ksize, nitr);
+    DeviceImage<std::uint8_t> d_input_image(input_image.cols, input_image.rows, 3);
+    DeviceImage<std::uint8_t> d_dst(input_image.cols, input_image.rows, 3);
+    CudaBilateralTextureFilter filter(input_image.cols, input_image.rows, ksize, nitr);
     cv::Mat3b dst_cuda(input_image.size());
 
     d_input_image.upload(input_image.ptr<std::uint8_t>());

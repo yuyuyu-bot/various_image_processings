@@ -31,21 +31,21 @@ private:
     public:
         ComputeMagnitude(const cv::Mat3b& image, cv::Mat1f& magnitude) : image_(image), magnitude_(magnitude) {}
 
+        auto compute_del(const cv::Mat3b& image, const int x0, const int y0, const int x1, const int y1) const {
+            const auto diff_b = image.at<PixType>(y0, x0)[0] - image.at<PixType>(y1, x1)[0];
+            const auto diff_g = image.at<PixType>(y0, x0)[1] - image.at<PixType>(y1, x1)[1];
+            const auto diff_r = image.at<PixType>(y0, x0)[2] - image.at<PixType>(y1, x1)[2];
+            return diff_b * diff_b + diff_g * diff_g + diff_r * diff_r;
+        }
+
         void compute_magnitude_pixel(const cv::Mat3b& image, cv::Mat1f& magnitude, const int x, const int y) const {
             if (x == 0 || x == image.cols - 1 || y == 0 || y == image.rows - 1) {
                 magnitude.at<float>(y, x) = 0.f;
                 return;
             }
 
-            const auto compute_del = [&image](const int x0, const int y0, const int x1, const int y1) {
-                const auto diff_b = image.at<PixType>(y0, x0)[0] - image.at<PixType>(y1, x1)[0];
-                const auto diff_g = image.at<PixType>(y0, x0)[1] - image.at<PixType>(y1, x1)[1];
-                const auto diff_r = image.at<PixType>(y0, x0)[2] - image.at<PixType>(y1, x1)[2];
-                return diff_b * diff_b + diff_g * diff_g + diff_r * diff_r;
-            };
-
-            const auto del_x = compute_del(x - 1, y, x + 1, y);
-            const auto del_y = compute_del(x, y - 1, x, y + 1);
+            const auto del_x = compute_del(image, x - 1, y, x + 1, y);
+            const auto del_y = compute_del(image, x, y - 1, x, y + 1);
             magnitude.at<float>(y, x) = std::sqrt(del_x + del_y);
         }
 

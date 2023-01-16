@@ -75,9 +75,9 @@ static void bench_bilateral_texture_filter(const int measurement_times, const cv
     const auto width  = input_image.cols;
     const auto height = input_image.rows;
 
-    cuda::DeviceImage<std::uint8_t> d_input_image(width, height, 3);
-    cuda::DeviceImage<std::uint8_t> d_dst(width, height, 3);
-    cuda::BilateralTextureFilter filter(width, height, ksize, nitr);
+    DeviceImage<std::uint8_t> d_input_image(width, height, 3);
+    DeviceImage<std::uint8_t> d_dst(width, height, 3);
+    CudaBilateralTextureFilter filter(width, height, ksize, nitr);
 
     d_input_image.upload(input_image_color.ptr<std::uint8_t>());
 

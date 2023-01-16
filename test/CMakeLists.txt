@@ -17,12 +17,14 @@ else()
 endif()
 
 # source files
-file(GLOB src "./*.cpp")
+file(GLOB src ${CMAKE_SOURCE_DIR}/src/*.c*)
+file(GLOB test_src ./*.c*)
+set(src ${src} ${test_src})
 
 # include directories
 set(inc
-    ../include
-    ../3rdparty/toml11
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
     ${OpenCV_INCLUDE_DIRS}
     ${GTEST_INCLUDE_DIRS}
 )

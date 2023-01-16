@@ -2,9 +2,6 @@
 #include <thrust/device_vector.h>
 #include "cuda/device_image.hpp"
 
-
-namespace cuda {
-
 template <typename ElemType>
 class DeviceImage<ElemType>::Impl {
 public:
@@ -52,5 +49,3 @@ ElemType* DeviceImage<ElemType>::get() {
 }
 
 template class DeviceImage<::std::uint8_t>;
-
-} // namespace cuda
