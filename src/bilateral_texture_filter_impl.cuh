@@ -31,14 +31,6 @@ public:
         const thrust::device_vector<float>& d_rtv,
         thrust::device_vector<std::uint8_t>& d_guide);
 
-    void joint_bilateral_filter(
-        const thrust::device_vector<std::uint8_t>& d_src,
-        const thrust::device_vector<std::uint8_t>& d_guide,
-        thrust::device_vector<std::uint8_t>& d_dst,
-        const int ksize,
-        const float sigma_space,
-        const float sigma_color);
-
 private:
     static constexpr auto jbf_sigma_color = 1.73205080757f; // sqrt(3)
 

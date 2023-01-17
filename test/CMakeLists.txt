@@ -1,14 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(test LANGUAGES CXX CUDA)
 
-# OpenCV
-find_package(OpenCV REQUIRED)
-if (OpenCV_FOUND)
-    message(STATUS "OpenCV version: " ${OpenCV_VERSION})
-else()
-    message(FATAL_ERROR "OpenCV not found.")
-endif()
-
 # googletest
 find_package(GTest REQUIRED)
 if (GTest_FOUND)
@@ -25,13 +17,11 @@ set(src ${src} ${test_src})
 set(inc
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
-    ${OpenCV_INCLUDE_DIRS}
     ${GTEST_INCLUDE_DIRS}
 )
 
 # libraries
 set(lib
-    ${OpenCV_LIBRARIES}
     GTest::GTest
     GTest::Main
 )

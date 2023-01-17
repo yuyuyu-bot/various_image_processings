@@ -14,7 +14,6 @@ public:
         const int ksize = 9,
         const float sigma_space = 10.f,
         const float sigma_color = 30.f);
-    ~Impl();
 
     void bilateral_filter(
         const std::uint8_t* const d_src,

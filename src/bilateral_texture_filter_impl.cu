@@ -262,7 +262,6 @@ void CudaBilateralTextureFilter::Impl::execute(
         jbf_executor_.joint_bilateral_filter(d_src_n_.data().get(), d_guide_.data().get(), d_dst_n_.data().get());
     }
 
-    cudaDeviceSynchronize();
     thrust::copy(d_dst_n_.begin(), d_dst_n_.end(), d_dst);
 }
 
