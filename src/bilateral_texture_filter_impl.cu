@@ -237,7 +237,7 @@ CudaBilateralTextureFilter::Impl::Impl(
   height_(height),
   ksize_(ksize),
   nitr_(nitr),
-  jbf_executor_(width, height, ksize, ksize - 1, jbf_sigma_color) {
+  jbf_executor_(width, height, 2 * ksize - 1, ksize - 1, jbf_sigma_color) {
     d_src_n_     = thrust::device_vector<std::uint8_t>(width_ * height_ * 3);
     d_dst_n_     = thrust::device_vector<std::uint8_t>(width_ * height_ * 3);
     d_blurred_   = thrust::device_vector<float>(width_ * height_ * 3);
