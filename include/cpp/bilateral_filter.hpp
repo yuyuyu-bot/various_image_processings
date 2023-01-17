@@ -102,7 +102,7 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            const auto guide_center_bgr = guide.at<GuideType>(y, x);
+            const auto guide_center_bgr = guide.at<cv::Vec3b>(y, x);
             auto sum_b = 0.f;
             auto sum_g = 0.f;
             auto sum_r = 0.f;
@@ -113,7 +113,7 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
                     const auto x_clamped = std::clamp(x + kx, 0, width - 1);
                     const auto y_clamped = std::clamp(y + ky, 0, height - 1);
                     const auto bgr       = src.at<cv::Vec3b>(y_clamped, x_clamped);
-                    const auto guide_bgr = guide.at<GuideType>(y_clamped, x_clamped);
+                    const auto guide_bgr = guide.at<cv::Vec3b>(y_clamped, x_clamped);
                     const auto kernel    = get_kernel_space(kx, ky) * get_kernel_color(guide_center_bgr, guide_bgr);
 
                     sum_b += bgr[0] * kernel;
