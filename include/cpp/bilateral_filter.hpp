@@ -9,9 +9,6 @@ namespace {
 
 inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksize = 9,
                              const float sigma_space = 10.f, const float sigma_color = 30.f) {
-    using PixType = cv::Vec3b;
-    using ElemType = std::uint8_t;
-
     const auto width  = src.cols;
     const auto height = src.rows;
     const auto radius  = ksize / 2;
@@ -44,7 +41,7 @@ inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksi
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            const auto center_bgr = src.at<PixType>(y, x);
+            const auto center_bgr = src.at<cv::Vec3b>(y, x);
             auto sum_b = 0.f;
             auto sum_g = 0.f;
             auto sum_r = 0.f;
@@ -54,7 +51,7 @@ inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksi
                 for (int kx = -radius; kx <= radius; kx++) {
                     const auto x_clamped = std::clamp(x + kx, 0, width - 1);
                     const auto y_clamped = std::clamp(y + ky, 0, height - 1);
-                    const auto bgr       = src.at<PixType>(y_clamped, x_clamped);
+                    const auto bgr       = src.at<cv::Vec3b>(y_clamped, x_clamped);
                     const auto kernel    = get_kernel_space(kx, ky) * get_kernel_color(center_bgr, bgr);
 
                     sum_b += bgr[0] * kernel;
@@ -64,18 +61,18 @@ inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksi
                 }
             }
 
-            dst.at<PixType>(y, x)[0] = static_cast<ElemType>(sum_b / sum_k);
-            dst.at<PixType>(y, x)[1] = static_cast<ElemType>(sum_g / sum_k);
-            dst.at<PixType>(y, x)[2] = static_cast<ElemType>(sum_r / sum_k);
+            dst.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum_b / sum_k);
+            dst.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum_g / sum_k);
+            dst.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum_r / sum_k);
         }
     }
 }
 
 inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide, cv::Mat3b& dst, const int ksize = 9,
                                    const float sigma_space = 10.f, const float sigma_color = 30.f) {
-    using PixType = cv::Vec3b;
+    using cv::Vec3b = cv::Vec3b;
     using GuideType = cv::Vec3b;
-    using ElemType = std::uint8_t;
+    using std::uint8_t = std::uint8_t;
 
     const auto width  = src.cols;
     const auto height = src.rows;
@@ -119,7 +116,7 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
                 for (int kx = -radius; kx <= radius; kx++) {
                     const auto x_clamped = std::clamp(x + kx, 0, width - 1);
                     const auto y_clamped = std::clamp(y + ky, 0, height - 1);
-                    const auto bgr       = src.at<PixType>(y_clamped, x_clamped);
+                    const auto bgr       = src.at<cv::Vec3b>(y_clamped, x_clamped);
                     const auto guide_bgr = guide.at<GuideType>(y_clamped, x_clamped);
                     const auto kernel    = get_kernel_space(kx, ky) * get_kernel_color(guide_center_bgr, guide_bgr);
 
@@ -130,9 +127,9 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
                 }
             }
 
-            dst.at<PixType>(y, x)[0] = static_cast<ElemType>(sum_b / sum_k);
-            dst.at<PixType>(y, x)[1] = static_cast<ElemType>(sum_g / sum_k);
-            dst.at<PixType>(y, x)[2] = static_cast<ElemType>(sum_r / sum_k);
+            dst.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum_b / sum_k);
+            dst.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum_g / sum_k);
+            dst.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum_r / sum_k);
         }
     }
 }

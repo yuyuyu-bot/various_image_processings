@@ -24,17 +24,14 @@ public:
     }
 
 private:
-    using PixType = cv::Vec3b;
-    using ElemType = std::uint8_t;
-
     class ComputeMagnitude : public cv::ParallelLoopBody {
     public:
         ComputeMagnitude(const cv::Mat3b& image, cv::Mat1f& magnitude) : image_(image), magnitude_(magnitude) {}
 
         auto compute_del(const cv::Mat3b& image, const int x0, const int y0, const int x1, const int y1) const {
-            const auto diff_b = image.at<PixType>(y0, x0)[0] - image.at<PixType>(y1, x1)[0];
-            const auto diff_g = image.at<PixType>(y0, x0)[1] - image.at<PixType>(y1, x1)[1];
-            const auto diff_r = image.at<PixType>(y0, x0)[2] - image.at<PixType>(y1, x1)[2];
+            const auto diff_b = image.at<cv::Vec3b>(y0, x0)[0] - image.at<cv::Vec3b>(y1, x1)[0];
+            const auto diff_g = image.at<cv::Vec3b>(y0, x0)[1] - image.at<cv::Vec3b>(y1, x1)[1];
+            const auto diff_r = image.at<cv::Vec3b>(y0, x0)[2] - image.at<cv::Vec3b>(y1, x1)[2];
             return diff_b * diff_b + diff_g * diff_g + diff_r * diff_r;
         }
 
@@ -79,7 +76,7 @@ private:
             const auto height = magnitude.rows;
             const auto radius = ksize / 2;
             const auto get_intensity = [&image](const int x, const int y) {
-                const auto bgr = image.at<PixType>(y, x);
+                const auto bgr = image.at<cv::Vec3b>(y, x);
                 return (bgr[0] + bgr[1] + bgr[2]) / 3.f;
             };
 
@@ -97,9 +94,9 @@ private:
                     const auto x_clamped = std::clamp(x + kx, 0, width - 1);
                     const auto y_clamped = std::clamp(y + ky, 0, height - 1);
 
-                    b_sum += image.at<PixType>(y_clamped, x_clamped)[0];
-                    g_sum += image.at<PixType>(y_clamped, x_clamped)[1];
-                    r_sum += image.at<PixType>(y_clamped, x_clamped)[2];
+                    b_sum += image.at<cv::Vec3b>(y_clamped, x_clamped)[0];
+                    g_sum += image.at<cv::Vec3b>(y_clamped, x_clamped)[1];
+                    r_sum += image.at<cv::Vec3b>(y_clamped, x_clamped)[2];
 
                     intensity_max  = std::max(intensity_max, get_intensity(x_clamped, y_clamped));
                     intensity_min  = std::min(intensity_min, get_intensity(x_clamped, y_clamped));
@@ -108,9 +105,9 @@ private:
                 }
             }
 
-            blurred.at<cv::Vec3f>(y, x)[0] = static_cast<ElemType>(b_sum / (ksize * ksize));
-            blurred.at<cv::Vec3f>(y, x)[1] = static_cast<ElemType>(g_sum / (ksize * ksize));
-            blurred.at<cv::Vec3f>(y, x)[2] = static_cast<ElemType>(r_sum / (ksize * ksize));
+            blurred.at<cv::Vec3f>(y, x)[0] = static_cast<std::uint8_t>(b_sum / (ksize * ksize));
+            blurred.at<cv::Vec3f>(y, x)[1] = static_cast<std::uint8_t>(g_sum / (ksize * ksize));
+            blurred.at<cv::Vec3f>(y, x)[2] = static_cast<std::uint8_t>(r_sum / (ksize * ksize));
             rtv.at<float>(y, x) = (intensity_max - intensity_min) * magnitude_max / (magnitude_sum + epsilon);
         }
 
