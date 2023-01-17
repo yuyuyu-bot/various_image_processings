@@ -4,6 +4,7 @@
 #include <cuda_runtime.h>
 #include <thrust/device_vector.h>
 
+#include "cuda/bilateral_filter.hpp"
 #include "cuda/bilateral_texture_filter.hpp"
 
 class CudaBilateralTextureFilter::Impl {
@@ -41,19 +42,19 @@ public:
 private:
     static constexpr auto jbf_sigma_color = 1.73205080757f; // sqrt(3)
 
-    const int   width_;
-    const int   height_;
-    const int   ksize_;
-    const int   nitr_;
-    const float sigma_space_;
-    const float sigma_color_;
+    const int width_;
+    const int height_;
+    const int ksize_;
+    const int nitr_;
 
     thrust::device_vector<std::uint8_t> d_src_n_;
     thrust::device_vector<std::uint8_t> d_dst_n_;
-    thrust::device_vector<float>    d_blurred_;
-    thrust::device_vector<float>    d_magnitude_;
-    thrust::device_vector<float>    d_rtv_;
+    thrust::device_vector<float>        d_blurred_;
+    thrust::device_vector<float>        d_magnitude_;
+    thrust::device_vector<float>        d_rtv_;
     thrust::device_vector<std::uint8_t> d_guide_;
+
+    const CudaBilateralFilter jbf_executor_;
 };
 
 #endif // BILATERAL_TEXTURE_FILTER_IMPL_CUH
