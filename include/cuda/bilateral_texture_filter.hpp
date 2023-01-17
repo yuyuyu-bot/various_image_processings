@@ -5,12 +5,10 @@
 
 class CudaBilateralTextureFilter {
 public:
-    using ElemType = ::std::uint8_t;
-
     CudaBilateralTextureFilter(const int width, const int height, const int ksize = 9, const int nitr = 3);
     ~CudaBilateralTextureFilter();
 
-    void execute(const ElemType* const d_src, ElemType* const d_dst);
+    void execute(const std::uint8_t* const d_src, std::uint8_t* const d_dst);
 
 protected:
     class Impl;

@@ -14,13 +14,13 @@ inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksi
 
     const auto width  = src.cols;
     const auto height = src.rows;
-    const auto khalf  = ksize / 2;
+    const auto radius  = ksize / 2;
     dst.create(src.size());
 
     const auto kernel_space = std::make_unique<float[]>(ksize * ksize);
-    for (int ky = -khalf; ky <= khalf; ky++) {
-        for (int kx = -khalf; kx <= khalf; kx++) {
-            const auto kidx = (ky + khalf) * ksize + (kx + khalf);
+    for (int ky = -radius; ky <= radius; ky++) {
+        for (int kx = -radius; kx <= radius; kx++) {
+            const auto kidx = (ky + radius) * ksize + (kx + radius);
             kernel_space[kidx] = std::exp(-(kx * kx + ky * ky) / (2 * sigma_space * sigma_space));
         }
     }
@@ -30,8 +30,8 @@ inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksi
         kernel_color_table[i] = std::exp(-i / (2 * sigma_color * sigma_color));
     }
 
-    const auto get_kernel_space = [ksize, khalf, &kernel_space](const int kx, const int ky) {
-        return kernel_space[(ky + khalf) * ksize + (kx + khalf)];
+    const auto get_kernel_space = [ksize, radius, &kernel_space](const int kx, const int ky) {
+        return kernel_space[(ky + radius) * ksize + (kx + radius)];
     };
 
     const auto get_kernel_color = [](const cv::Vec3b& a, const cv::Vec3b& b) {
@@ -50,8 +50,8 @@ inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksi
             auto sum_r = 0.f;
             auto sum_k = 0.f;
 
-            for (int ky = -khalf; ky <= khalf; ky++) {
-                for (int kx = -khalf; kx <= khalf; kx++) {
+            for (int ky = -radius; ky <= radius; ky++) {
+                for (int kx = -radius; kx <= radius; kx++) {
                     const auto x_clamped = std::clamp(x + kx, 0, width - 1);
                     const auto y_clamped = std::clamp(y + ky, 0, height - 1);
                     const auto bgr       = src.at<PixType>(y_clamped, x_clamped);
@@ -79,13 +79,13 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
 
     const auto width  = src.cols;
     const auto height = src.rows;
-    const auto khalf  = ksize / 2;
+    const auto radius  = ksize / 2;
     dst.create(src.size());
 
     const auto kernel_space = std::make_unique<float[]>(ksize * ksize);
-    for (int ky = -khalf; ky <= khalf; ky++) {
-        for (int kx = -khalf; kx <= khalf; kx++) {
-            const auto kidx = (ky + khalf) * ksize + (kx + khalf);
+    for (int ky = -radius; ky <= radius; ky++) {
+        for (int kx = -radius; kx <= radius; kx++) {
+            const auto kidx = (ky + radius) * ksize + (kx + radius);
             kernel_space[kidx] = std::exp(-(kx * kx + ky * ky) / (2 * sigma_space * sigma_space));
         }
     }
@@ -95,8 +95,8 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
         kernel_color_table[i] = std::exp(-i / (2 * sigma_color * sigma_color));
     }
 
-    const auto get_kernel_space = [ksize, khalf, &kernel_space](const int kx, const int ky) {
-        return kernel_space[(ky + khalf) * ksize + (kx + khalf)];
+    const auto get_kernel_space = [ksize, radius, &kernel_space](const int kx, const int ky) {
+        return kernel_space[(ky + radius) * ksize + (kx + radius)];
     };
 
     const auto get_kernel_color = [](const cv::Vec3b& a, const cv::Vec3b& b) {
@@ -115,8 +115,8 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
             auto sum_r = 0.f;
             auto sum_k = 0.f;
 
-            for (int ky = -khalf; ky <= khalf; ky++) {
-                for (int kx = -khalf; kx <= khalf; kx++) {
+            for (int ky = -radius; ky <= radius; ky++) {
+                for (int kx = -radius; kx <= radius; kx++) {
                     const auto x_clamped = std::clamp(x + kx, 0, width - 1);
                     const auto y_clamped = std::clamp(y + ky, 0, height - 1);
                     const auto bgr       = src.at<PixType>(y_clamped, x_clamped);

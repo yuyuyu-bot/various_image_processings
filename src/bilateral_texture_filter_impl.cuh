@@ -12,31 +12,28 @@ public:
     ~Impl();
 
     void execute(
-        const ElemType* const d_src,
-        ElemType* const d_dst);
+        const std::uint8_t* const d_src,
+        std::uint8_t* const d_dst);
 
     void compute_magnitude(
-        const thrust::device_vector<ElemType>& d_image,
+        const thrust::device_vector<std::uint8_t>& d_image,
         thrust::device_vector<float>& d_magnitude);
 
-    template <typename BlurredType, typename RTVType>
     void compute_blur_and_rtv(
-        const thrust::device_vector<ElemType>& d_image,
+        const thrust::device_vector<std::uint8_t>& d_image,
         const thrust::device_vector<float>& d_magnitude,
-        thrust::device_vector<BlurredType>& d_blurred,
-        thrust::device_vector<RTVType>& d_rtv);
+        thrust::device_vector<float>& d_blurred,
+        thrust::device_vector<float>& d_rtv);
 
-    template <typename BlurredType, typename RTVType, typename GuideType>
     void compute_guide(
-        const thrust::device_vector<BlurredType>& d_blurred,
-        const thrust::device_vector<RTVType>& d_rtv,
-        thrust::device_vector<GuideType>& d_guide);
+        const thrust::device_vector<float>& d_blurred,
+        const thrust::device_vector<float>& d_rtv,
+        thrust::device_vector<std::uint8_t>& d_guide);
 
-    template <typename GuideType>
     void joint_bilateral_filter(
-        const thrust::device_vector<ElemType>& d_src,
-        const thrust::device_vector<GuideType>& d_guide,
-        thrust::device_vector<ElemType>& d_dst,
+        const thrust::device_vector<std::uint8_t>& d_src,
+        const thrust::device_vector<std::uint8_t>& d_guide,
+        thrust::device_vector<std::uint8_t>& d_dst,
         const int ksize,
         const float sigma_space,
         const float sigma_color);
@@ -51,12 +48,12 @@ private:
     const float sigma_space_;
     const float sigma_color_;
 
-    thrust::device_vector<ElemType> d_src_n_;
-    thrust::device_vector<ElemType> d_dst_n_;
+    thrust::device_vector<std::uint8_t> d_src_n_;
+    thrust::device_vector<std::uint8_t> d_dst_n_;
     thrust::device_vector<float>    d_blurred_;
     thrust::device_vector<float>    d_magnitude_;
     thrust::device_vector<float>    d_rtv_;
-    thrust::device_vector<ElemType> d_guide_;
+    thrust::device_vector<std::uint8_t> d_guide_;
 };
 
 #endif // BILATERAL_TEXTURE_FILTER_IMPL_CUH

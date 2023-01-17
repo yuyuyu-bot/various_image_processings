@@ -6,13 +6,12 @@
 
 static constexpr auto epsilon = 1e-9;
 
-template <typename ImageType>
 __global__ void compute_magnitude_kernel(
-    const ImageType* const image,
+    const std::uint8_t* const image,
     float* const magnitude,
     const int width,
-    const int height)
-{
+    const int height
+) {
     const int x = blockDim.x * blockIdx.x + threadIdx.x;
     const int y = blockDim.y * blockIdx.y + threadIdx.y;
     const int tx = threadIdx.x;
@@ -20,7 +19,7 @@ __global__ void compute_magnitude_kernel(
     const int stride_3ch = width * 3;
     const int stride = width;
 
-    extern __shared__ ImageType s_image_buffer[];
+    extern __shared__ std::uint8_t s_image_buffer[];
     const int smem_width  = blockDim.x + 2;
     const int smem_height = blockDim.y + 2;
     const int smem_stride = smem_width * 3;
@@ -63,16 +62,15 @@ __global__ void compute_magnitude_kernel(
     magnitude[stride * y + x] = sqrtf(del_x + del_y);
 }
 
-template <typename ImageType, typename BlurredType, typename RTVType>
 __global__ void compute_blur_and_rtv_kernel(
-    const ImageType* const image,
+    const std::uint8_t* const image,
     const float* const magnitude,
-    BlurredType* const blurred,
-    RTVType* const rtv,
+    float* const blurred,
+    float* const rtv,
     const int ksize,
     const int width,
-    const int height)
-{
+    const int height
+) {
     const int x = blockDim.x * blockIdx.x + threadIdx.x;
     const int y = blockDim.y * blockIdx.y + threadIdx.y;
     const int tx = threadIdx.x;
@@ -88,7 +86,7 @@ __global__ void compute_blur_and_rtv_kernel(
     const int smem_origin_y = y - ty - radius;
 
     // shared image
-    extern __shared__ ImageType s_image_magnitude_buffer[];
+    extern __shared__ std::uint8_t s_image_magnitude_buffer[];
     auto s_img = &s_image_magnitude_buffer[0];
     const auto s_img_stride = smem_width * 3;
     const auto get_s_img_ptr = [s_img, s_img_stride, smem_origin_x, smem_origin_y](const int img_x, const int img_y) {
@@ -125,9 +123,9 @@ __global__ void compute_blur_and_rtv_kernel(
         return;
     }
 
-    auto sum0 = 0;
-    auto sum1 = 0;
-    auto sum2 = 0;
+    auto sum0 = 0.f;
+    auto sum1 = 0.f;
+    auto sum2 = 0.f;
 
     auto intensity_max = 0.f;
     auto intensity_min = 256.f;
@@ -154,28 +152,57 @@ __global__ void compute_blur_and_rtv_kernel(
         }
     }
 
-    blurred[stride_3ch * y + x * 3 + 0] = static_cast<BlurredType>(sum0 / (ksize * ksize));
-    blurred[stride_3ch * y + x * 3 + 1] = static_cast<BlurredType>(sum1 / (ksize * ksize));
-    blurred[stride_3ch * y + x * 3 + 2] = static_cast<BlurredType>(sum2 / (ksize * ksize));
+    blurred[stride_3ch * y + x * 3 + 0] = sum0 / (ksize * ksize);
+    blurred[stride_3ch * y + x * 3 + 1] = sum1 / (ksize * ksize);
+    blurred[stride_3ch * y + x * 3 + 2] = sum2 / (ksize * ksize);
     rtv[stride * y + x] = (intensity_max - intensity_min) * magnitude_max / (magnitude_sum + epsilon);
 }
 
-template <typename BlurredType, typename RTVType, typename GuideType>
 __global__ void compute_guide_kernel(
-    const BlurredType* const blurred,
-    const RTVType* const rtv,
-    GuideType* const guide,
+    const float* const blurred,
+    const float* const rtv,
+    std::uint8_t* const guide,
     const int ksize,
     const int width,
-    const int height)
-{
-    const int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    const int height
+) {
+    const int x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int y = blockDim.y * blockIdx.y + threadIdx.y;
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
     const int stride_3ch = width * 3;
     const int stride = width;
-    const int x = idx % width;
-    const int y = idx / width;
     const auto radius  = ksize / 2;
     const auto sigma_alpha = 1.f / (5 * ksize);
+
+    // config of shared memory
+    const int smem_width    = blockDim.x + ksize - 1;
+    const int smem_height   = blockDim.y + ksize - 1;
+    const int smem_origin_x = x - tx - radius;
+    const int smem_origin_y = y - ty - radius;
+
+    extern __shared__ float s_rtv_buffer[];
+    auto s_rtv = &s_rtv_buffer[0];
+    const auto get_s_rtv_ptr = [s_rtv, smem_width, smem_origin_x, smem_origin_y](const int rtv_x, const int rtv_y) {
+        const auto s_rtv_x = rtv_x - smem_origin_x;
+        const auto s_rtv_y = rtv_y - smem_origin_y;
+        return &s_rtv[smem_width * s_rtv_y + s_rtv_x];
+    };
+
+    // copy global data to shared memory
+    for (int y_offset = ty; y_offset < smem_height; y_offset += blockDim.y) {
+        for (int x_offset = tx; x_offset < smem_width; x_offset += blockDim.x) {
+            auto* const s_rtv_ptr  = get_s_rtv_ptr(smem_origin_x + x_offset, smem_origin_y + y_offset);
+            const auto x_clamped = clamp(smem_origin_x + x_offset, 0, width - 1);
+            const auto y_clamped = clamp(smem_origin_y + y_offset, 0, height - 1);
+            *s_rtv_ptr = rtv[stride * y_clamped + x_clamped];
+        }
+    }
+    __syncthreads();
+
+    if (x >= width || y >= height) {
+        return;
+    }
 
     auto rtv_min = 1e10f;
     auto rtv_min_x = 0;
@@ -183,19 +210,16 @@ __global__ void compute_guide_kernel(
 
     for (int ky = -radius; ky <= radius; ky++) {
         for (int kx = -radius; kx <= radius; kx++) {
-            const auto x_clamped = clamp(x + kx, 0, width - 1);
-            const auto y_clamped = clamp(y + ky, 0, height - 1);
-
-            if (rtv_min > rtv[stride * y_clamped + x_clamped]) {
-                rtv_min = rtv[stride * y_clamped + x_clamped];
-                rtv_min_x = x_clamped;
-                rtv_min_y = y_clamped;
+            const auto rtv_value = *get_s_rtv_ptr(x + kx, y + ky);
+            if (rtv_min > rtv_value) {
+                rtv_min = rtv_value;
+                rtv_min_x = clamp(x + kx, 0, width - 1);
+                rtv_min_y = clamp(y + ky, 0, height - 1);
             }
         }
     }
 
-    const auto alpha =
-        2 / (1 + exp(sigma_alpha * (rtv[stride * y + x] - rtv[stride * rtv_min_y + rtv_min_x]))) - 1.f;
+    const auto alpha = 2 / (1 + exp(sigma_alpha * (*get_s_rtv_ptr(x, y) - *get_s_rtv_ptr(rtv_min_x, rtv_min_y)))) - 1.f;
     guide[stride_3ch * y + x * 3 + 0] =      alpha  * blurred[stride_3ch * rtv_min_y + rtv_min_x * 3 + 0] +
                                         (1 - alpha) * blurred[stride_3ch * y + x * 3 + 0];
     guide[stride_3ch * y + x * 3 + 1] =      alpha  * blurred[stride_3ch * rtv_min_y + rtv_min_x * 3 + 1] +
@@ -204,17 +228,16 @@ __global__ void compute_guide_kernel(
                                         (1 - alpha) * blurred[stride_3ch * y + x * 3 + 2];
 }
 
-template <typename ImageType, typename GuideType>
 __global__ void joint_bilateral_filter_kernel(
-    const ImageType* const src,
-    const GuideType* const guide,
-    ImageType* const dst,
+    const std::uint8_t* const src,
+    const std::uint8_t* const guide,
+    std::uint8_t* const dst,
     const int ksize,
     const float* const kernel_space,
     const float* const kernel_color_table,
     const int width,
-    const int height)
-{
+    const int height
+) {
     const int idx = blockDim.x * blockIdx.x + threadIdx.x;
     const int stride_3ch = width * 3;
     const int x = idx % width;
@@ -266,9 +289,9 @@ __global__ void joint_bilateral_filter_kernel(
         }
     }
 
-    dst[stride_3ch * y + x * 3 + 0] = static_cast<ImageType>(sum0 / sum_k);
-    dst[stride_3ch * y + x * 3 + 1] = static_cast<ImageType>(sum1 / sum_k);
-    dst[stride_3ch * y + x * 3 + 2] = static_cast<ImageType>(sum2 / sum_k);
+    dst[stride_3ch * y + x * 3 + 0] = static_cast<std::uint8_t>(sum0 / sum_k);
+    dst[stride_3ch * y + x * 3 + 1] = static_cast<std::uint8_t>(sum1 / sum_k);
+    dst[stride_3ch * y + x * 3 + 2] = static_cast<std::uint8_t>(sum2 / sum_k);
 }
 
 CudaBilateralTextureFilter::Impl::Impl(
@@ -281,22 +304,21 @@ CudaBilateralTextureFilter::Impl::Impl(
   ksize_(ksize),
   nitr_(nitr),
   sigma_space_(ksize - 1),
-  sigma_color_(jbf_sigma_color)
-{
-    d_src_n_     = thrust::device_vector<ElemType>(width_ * height_ * 3);
-    d_dst_n_     = thrust::device_vector<ElemType>(width_ * height_ * 3);
+  sigma_color_(jbf_sigma_color) {
+    d_src_n_     = thrust::device_vector<std::uint8_t>(width_ * height_ * 3);
+    d_dst_n_     = thrust::device_vector<std::uint8_t>(width_ * height_ * 3);
     d_blurred_   = thrust::device_vector<float>(width_ * height_ * 3);
     d_magnitude_ = thrust::device_vector<float>(width_ * height_);
     d_rtv_       = thrust::device_vector<float>(width_ * height_);
-    d_guide_     = thrust::device_vector<ElemType>(width_ * height_ * 3);
+    d_guide_     = thrust::device_vector<std::uint8_t>(width_ * height_ * 3);
 }
 
 CudaBilateralTextureFilter::Impl::~Impl() {}
 
 void CudaBilateralTextureFilter::Impl::execute(
-    const ElemType* const d_src,
-    ElemType* const d_dst)
-{
+    const std::uint8_t* const d_src,
+    std::uint8_t* const d_dst
+) {
     thrust::copy(d_src, d_src + width_ * height_ * 3, d_dst_n_.begin());
 
     for (int itr = 0; itr < nitr_; itr++) {
@@ -312,9 +334,9 @@ void CudaBilateralTextureFilter::Impl::execute(
 }
 
 void CudaBilateralTextureFilter::Impl::compute_magnitude(
-    const thrust::device_vector<ElemType>& d_image,
-    thrust::device_vector<float>& d_magnitude)
-{
+    const thrust::device_vector<std::uint8_t>& d_image,
+    thrust::device_vector<float>& d_magnitude
+) {
     const std::uint32_t block_width  = 32u;
     const std::uint32_t block_height = 32u;
     const std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
@@ -322,20 +344,19 @@ void CudaBilateralTextureFilter::Impl::compute_magnitude(
 
     const dim3 grid_dim (grid_width, grid_height);
     const dim3 block_dim(block_width, block_height);
-    const std::uint32_t smem_size = (block_width + 2) * (block_height + 2) * 3 * sizeof(ElemType);
+    const std::uint32_t smem_size = (block_width + 2) * (block_height + 2) * 3 * sizeof(std::uint8_t);
 
     compute_magnitude_kernel<<<grid_dim, block_dim, smem_size>>>(
         d_image.data().get(), d_magnitude.data().get(), width_, height_);
     CUDASafeCall();
 }
 
-template <typename BlurredType, typename RTVType>
 void CudaBilateralTextureFilter::Impl::compute_blur_and_rtv(
-    const thrust::device_vector<ElemType>& d_image,
+    const thrust::device_vector<std::uint8_t>& d_image,
     const thrust::device_vector<float>& d_magnitude,
-    thrust::device_vector<BlurredType>& d_blurred,
-    thrust::device_vector<RTVType>& d_rtv)
-{
+    thrust::device_vector<float>& d_blurred,
+    thrust::device_vector<float>& d_rtv
+) {
     const std::uint32_t block_width  = 16u;
     const std::uint32_t block_height = 8u;
     const std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
@@ -344,7 +365,7 @@ void CudaBilateralTextureFilter::Impl::compute_blur_and_rtv(
     const dim3 grid_dim (grid_width, grid_height);
     const dim3 block_dim(block_width, block_height);
     const std::uint32_t smem_size =
-        (block_width + ksize_ - 1) * (block_height + ksize_ - 1) * 3 * sizeof(ElemType) +
+        (block_width + ksize_ - 1) * (block_height + ksize_ - 1) * 3 * sizeof(std::uint8_t) +
         (block_width + ksize_ - 1) * (block_height + ksize_ - 1) * sizeof(float);
 
     compute_blur_and_rtv_kernel<<<grid_dim, block_dim, smem_size>>>(
@@ -353,28 +374,33 @@ void CudaBilateralTextureFilter::Impl::compute_blur_and_rtv(
     CUDASafeCall();
 }
 
-template <typename BlurredType, typename RTVType, typename GuideType>
 void CudaBilateralTextureFilter::Impl::compute_guide(
-    const thrust::device_vector<BlurredType>& d_blurred,
-    const thrust::device_vector<RTVType>& d_rtv,
-    thrust::device_vector<GuideType>& d_guide)
-{
-    const dim3 grid_dim{static_cast<std::uint32_t>(height_)};
-    const dim3 block_dim{static_cast<std::uint32_t>(width_)};
-    compute_guide_kernel<<<grid_dim, block_dim>>>(
+    const thrust::device_vector<float>& d_blurred,
+    const thrust::device_vector<float>& d_rtv,
+    thrust::device_vector<std::uint8_t>& d_guide
+) {
+    const std::uint32_t block_width  = 16u;
+    const std::uint32_t block_height = 8u;
+    const std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
+    const std::uint32_t grid_height  = (height_ + block_height - 1) / block_height;
+
+    const dim3 grid_dim (grid_width, grid_height);
+    const dim3 block_dim(block_width, block_height);
+    const std::uint32_t smem_size = (block_width + ksize_ - 1) * (block_height + ksize_ - 1) * sizeof(float);
+
+    compute_guide_kernel<<<grid_dim, block_dim, smem_size>>>(
         d_blurred.data().get(), d_rtv.data().get(), d_guide.data().get(), ksize_, width_, height_);
     CUDASafeCall();
 }
 
-template <typename GuideType>
 void CudaBilateralTextureFilter::Impl::joint_bilateral_filter(
-    const thrust::device_vector<ElemType>& d_src,
-    const thrust::device_vector<GuideType>& d_guide,
-    thrust::device_vector<ElemType>& d_dst,
+    const thrust::device_vector<std::uint8_t>& d_src,
+    const thrust::device_vector<std::uint8_t>& d_guide,
+    thrust::device_vector<std::uint8_t>& d_dst,
     const int ksize,
     const float sigma_space,
-    const float sigma_color)
-{
+    const float sigma_color
+) {
     const auto gauss_color_coeff = -1.f / (2 * sigma_color * sigma_color);
     const auto gauss_space_coeff = -1.f / (2 * sigma_space * sigma_space);
     const auto radius  = ksize / 2;
@@ -411,8 +437,8 @@ CudaBilateralTextureFilter::CudaBilateralTextureFilter(
     const int width,
     const int height,
     const int ksize,
-    const int nitr)
-{
+    const int nitr
+) {
     impl_ = new CudaBilateralTextureFilter::Impl(width, height, ksize, nitr);
 }
 
@@ -421,9 +447,9 @@ CudaBilateralTextureFilter::~CudaBilateralTextureFilter() {
 }
 
 void CudaBilateralTextureFilter::execute(
-    const ElemType* const d_src,
-    ElemType* const d_dst)
-{
+    const std::uint8_t* const d_src,
+    std::uint8_t* const d_dst
+) {
     impl_->execute(d_src, d_dst);
     cudaDeviceSynchronize();
 }

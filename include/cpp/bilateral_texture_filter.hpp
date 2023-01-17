@@ -77,23 +77,23 @@ private:
                                         cv::Mat1f& rtv, const int ksize, const int x, const int y) const {
             const auto width  = magnitude.cols;
             const auto height = magnitude.rows;
-            const auto khalf  = ksize / 2;
+            const auto radius = ksize / 2;
             const auto get_intensity = [&image](const int x, const int y) {
                 const auto bgr = image.at<PixType>(y, x);
                 return (bgr[0] + bgr[1] + bgr[2]) / 3.f;
             };
 
-            auto b_sum = 0;
-            auto g_sum = 0;
-            auto r_sum = 0;
+            auto b_sum = 0.f;
+            auto g_sum = 0.f;
+            auto r_sum = 0.f;
 
             auto intensity_max = 0.f;
             auto intensity_min = 256.f;
             auto magnitude_max = 0.f;
             auto magnitude_sum = 0.f;
 
-            for (int ky = -khalf; ky <= khalf; ky++) {
-                for (int kx = -khalf; kx <= khalf; kx++) {
+            for (int ky = -radius; ky <= radius; ky++) {
+                for (int kx = -radius; kx <= radius; kx++) {
                     const auto x_clamped = std::clamp(x + kx, 0, width - 1);
                     const auto y_clamped = std::clamp(y + ky, 0, height - 1);
 
@@ -146,15 +146,15 @@ private:
                                  const int x, const int y) const {
             const auto width  = blurred.cols;
             const auto height = blurred.rows;
-            const auto khalf  = ksize / 2;
+            const auto radius  = ksize / 2;
             const auto sigma_alpha = 1.f / (5 * ksize);
 
             auto rtv_min = std::numeric_limits<float>::max();
             auto rtv_min_x = 0;
             auto rtv_min_y = 0;
 
-            for (int ky = -khalf; ky <= khalf; ky++) {
-                for (int kx = -khalf; kx <= khalf; kx++) {
+            for (int ky = -radius; ky <= radius; ky++) {
+                for (int kx = -radius; kx <= radius; kx++) {
                     const auto x_clamped = std::clamp(x + kx, 0, width - 1);
                     const auto y_clamped = std::clamp(y + ky, 0, height - 1);
 
