@@ -70,10 +70,6 @@ inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksi
 
 inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide, cv::Mat3b& dst, const int ksize = 9,
                                    const float sigma_space = 10.f, const float sigma_color = 30.f) {
-    using cv::Vec3b = cv::Vec3b;
-    using GuideType = cv::Vec3b;
-    using std::uint8_t = std::uint8_t;
-
     const auto width  = src.cols;
     const auto height = src.rows;
     const auto radius  = ksize / 2;
