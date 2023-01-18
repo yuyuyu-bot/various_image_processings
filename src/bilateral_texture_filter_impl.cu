@@ -269,8 +269,8 @@ void CudaBilateralTextureFilter::Impl::compute_magnitude(
     const thrust::device_vector<std::uint8_t>& d_image,
     thrust::device_vector<float>& d_magnitude
 ) {
-    const std::uint32_t block_width  = 32u;
-    const std::uint32_t block_height = 32u;
+    const std::uint32_t block_width  = 16u;
+    const std::uint32_t block_height = 16u;
     const std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
     const std::uint32_t grid_height  = (height_ + block_height - 1) / block_height;
 
@@ -290,7 +290,7 @@ void CudaBilateralTextureFilter::Impl::compute_blur_and_rtv(
     thrust::device_vector<float>& d_rtv
 ) {
     const std::uint32_t block_width  = 16u;
-    const std::uint32_t block_height = 8u;
+    const std::uint32_t block_height = 16u;
     const std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
     const std::uint32_t grid_height  = (height_ + block_height - 1) / block_height;
 
@@ -312,7 +312,7 @@ void CudaBilateralTextureFilter::Impl::compute_guide(
     thrust::device_vector<std::uint8_t>& d_guide
 ) {
     const std::uint32_t block_width  = 16u;
-    const std::uint32_t block_height = 8u;
+    const std::uint32_t block_height = 16u;
     const std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
     const std::uint32_t grid_height  = (height_ + block_height - 1) / block_height;
 
