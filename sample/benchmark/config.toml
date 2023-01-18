@@ -1,7 +1,8 @@
 execute_times = 300
 
+[BilateralFilter]
+ksize       = 9
+
 [BilateralTextureFilter]
-run         = true
-run_cuda    = true
 ksize       = 9
 nitr        = 3

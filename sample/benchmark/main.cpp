@@ -6,6 +6,7 @@
 #include "toml.hpp"
 
 #include "cuda/device_image.hpp"
+#include "cuda/bilateral_filter.hpp"
 #include "cuda/bilateral_texture_filter.hpp"
 
 #define MEASURE(num_itr, fn, duration)                                                                                 \
@@ -28,6 +29,10 @@ struct Parameters {
 
     struct {
         int ksize = 9;
+    } BilateralFilter;
+
+    struct {
+        int ksize = 9;
         int nitr = 3;
     } BilateralTextureFilter;
 };
@@ -40,6 +45,10 @@ static auto parse_config(const std::string& filename) {
 
     // common
     params.execute_times = toml::find<int>(toml_all, "execute_times");
+
+    // bilateral filter
+    data = toml::find(toml_all, "BilateralFilter");
+    params.BilateralFilter.ksize = toml::find<int>(data, "ksize");
 
     // bilateral texture filter
     data = toml::find(toml_all, "BilateralTextureFilter");
@@ -67,8 +76,37 @@ static void print_duration(const std::string& name, const float duration) {
     std::printf("%-30s : %10.3f [msec]\n", name.c_str(), duration);
 }
 
-static void bench_bilateral_texture_filter(const int measurement_times, const cv::Mat& input_image,
-                                           const int ksize, const int nitr) {
+static void bench_bilateral_filter(
+    const int measurement_times,
+    const cv::Mat& input_image,
+    const int ksize
+) {
+    const cv::Mat3b input_image_color = convert_to_3ch(input_image);
+    cv::Mat3b dst(input_image_color.size());
+
+    const auto width  = input_image.cols;
+    const auto height = input_image.rows;
+
+    DeviceImage<std::uint8_t> d_input_image(width, height, 3);
+    DeviceImage<std::uint8_t> d_dst(width, height, 3);
+    CudaBilateralFilter filter(width, height, ksize);
+
+    d_input_image.upload(input_image_color.ptr<std::uint8_t>());
+
+    float duration = 0.f;
+    MEASURE(measurement_times, filter.bilateral_filter(d_input_image.get(), d_dst.get()), duration);
+    print_duration("bilateral filter", duration);
+
+    d_dst.download(dst.ptr<std::uint8_t>());
+}
+
+
+static void bench_bilateral_texture_filter(
+    const int measurement_times,
+    const cv::Mat& input_image,
+    const int ksize,
+    const int nitr
+) {
     const cv::Mat3b input_image_color = convert_to_3ch(input_image);
     cv::Mat3b dst(input_image_color.size());
 
@@ -107,9 +145,13 @@ int main(int argc, char** argv) {
     std::cout << "\twidth         : " << input_image.cols << std::endl;
     std::cout << "\theight        : " << input_image.rows << std::endl;
     std::cout << "\texecute times : " << params.execute_times << std::endl;
+    std::cout << "\t[bilateral filter] ksize : " << params.BilateralFilter.ksize << std::endl;
     std::cout << "\t[bilateral texture filter] ksize : " << params.BilateralTextureFilter.ksize << std::endl;
     std::cout << "\t[bilateral texture filter] nitr  : " << params.BilateralTextureFilter.nitr << std::endl;
     std::cout << std::endl;
+
+    bench_bilateral_filter(
+        params.execute_times, input_image, params.BilateralFilter.ksize);
 
     bench_bilateral_texture_filter(
         params.execute_times, input_image, params.BilateralTextureFilter.ksize, params.BilateralTextureFilter.nitr);
