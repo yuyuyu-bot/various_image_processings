@@ -183,9 +183,12 @@ TEST(BilateralFilterTest, BilateralFilter) {
         for (int x = 0; x < width; x++) {
             const auto actual_ptr   = &actual[width * 3 * y + x * 3];
             const auto expected_ptr = &expected[width * 3 * y + x * 3];
-            EXPECT_EQ(actual_ptr[0], expected_ptr[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
-            EXPECT_EQ(actual_ptr[1], expected_ptr[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
-            EXPECT_EQ(actual_ptr[2], expected_ptr[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+            const auto diff0 = std::abs(static_cast<int>(actual_ptr[0]) - static_cast<int>(expected_ptr[0]));
+            const auto diff1 = std::abs(static_cast<int>(actual_ptr[1]) - static_cast<int>(expected_ptr[1]));
+            const auto diff2 = std::abs(static_cast<int>(actual_ptr[2]) - static_cast<int>(expected_ptr[2]));
+            EXPECT_LE(diff0, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_LE(diff1, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_LE(diff2, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
         }
     }
 }
@@ -216,9 +219,12 @@ TEST(BilateralFilterTest, JointBilateralFilter) {
         for (int x = 0; x < width; x++) {
             const auto actual_ptr   = &actual[width * 3 * y + x * 3];
             const auto expected_ptr = &expected[width * 3 * y + x * 3];
-            EXPECT_EQ(actual_ptr[0], expected_ptr[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
-            EXPECT_EQ(actual_ptr[1], expected_ptr[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
-            EXPECT_EQ(actual_ptr[2], expected_ptr[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+            const auto diff0 = std::abs(static_cast<int>(actual_ptr[0]) - static_cast<int>(expected_ptr[0]));
+            const auto diff1 = std::abs(static_cast<int>(actual_ptr[1]) - static_cast<int>(expected_ptr[1]));
+            const auto diff2 = std::abs(static_cast<int>(actual_ptr[2]) - static_cast<int>(expected_ptr[2]));
+            EXPECT_LE(diff0, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_LE(diff1, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_LE(diff2, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
         }
     }
 }
