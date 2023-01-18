@@ -7,127 +7,195 @@
 
 namespace {
 
-inline void bilateral_filter(const cv::Mat3b& src, cv::Mat3b& dst, const int ksize = 9,
-                             const float sigma_space = 10.f, const float sigma_color = 30.f) {
-    const auto width  = src.cols;
-    const auto height = src.rows;
+inline auto pre_compute_kernels(const int ksize, const float sigma_space, const float sigma_color) {
     const auto radius  = ksize / 2;
-    dst.create(src.size());
+    const auto gauss_color_coeff = -1.f / (2 * sigma_color * sigma_color);
+    const auto gauss_space_coeff = -1.f / (2 * sigma_space * sigma_space);
 
-    const auto kernel_space = std::make_unique<float[]>(ksize * ksize);
+    std::vector<float> kernel_space(ksize * ksize);
     for (int ky = -radius; ky <= radius; ky++) {
         for (int kx = -radius; kx <= radius; kx++) {
             const auto kidx = (ky + radius) * ksize + (kx + radius);
-            kernel_space[kidx] = std::exp(-(kx * kx + ky * ky) / (2 * sigma_space * sigma_space));
-        }
-    }
-
-    static std::array<float, 255 * 255> kernel_color_table;
-    for (int i = 0; i < kernel_color_table.size(); i++) {
-        kernel_color_table[i] = std::exp(-i / (2 * sigma_color * sigma_color));
-    }
-
-    const auto get_kernel_space = [ksize, radius, &kernel_space](const int kx, const int ky) {
-        return kernel_space[(ky + radius) * ksize + (kx + radius)];
-    };
-
-    const auto get_kernel_color = [](const cv::Vec3b& a, const cv::Vec3b& b) {
-        const auto diff_b = static_cast<int>(a[0]) - static_cast<int>(b[0]);
-        const auto diff_g = static_cast<int>(a[1]) - static_cast<int>(b[1]);
-        const auto diff_r = static_cast<int>(a[2]) - static_cast<int>(b[2]);
-        const auto color_distance = (diff_b * diff_b + diff_g * diff_g + diff_r * diff_r) / 3;
-        return kernel_color_table[static_cast<int>(color_distance + 0.5f)];
-    };
-
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            const auto center_bgr = src.at<cv::Vec3b>(y, x);
-            auto sum_b = 0.f;
-            auto sum_g = 0.f;
-            auto sum_r = 0.f;
-            auto sum_k = 0.f;
-
-            for (int ky = -radius; ky <= radius; ky++) {
-                for (int kx = -radius; kx <= radius; kx++) {
-                    const auto x_clamped = std::clamp(x + kx, 0, width - 1);
-                    const auto y_clamped = std::clamp(y + ky, 0, height - 1);
-                    const auto bgr       = src.at<cv::Vec3b>(y_clamped, x_clamped);
-                    const auto kernel    = get_kernel_space(kx, ky) * get_kernel_color(center_bgr, bgr);
-
-                    sum_b += bgr[0] * kernel;
-                    sum_g += bgr[1] * kernel;
-                    sum_r += bgr[2] * kernel;
-                    sum_k += kernel;
-                }
+            const auto r2 = kx * kx + ky * ky;
+            if (r2 > radius * radius) {
+                kernel_space[kidx] = 0.f;
+                continue;
             }
-
-            dst.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum_b / sum_k);
-            dst.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum_g / sum_k);
-            dst.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum_r / sum_k);
+            kernel_space[kidx] = std::exp(r2 * gauss_space_coeff);
         }
     }
+
+    std::array<float, 256 * 3> kernel_color_table;
+    for (int i = 0; i < kernel_color_table.size(); i++) {
+        kernel_color_table[i] = std::exp((i * i) * gauss_color_coeff);
+    }
+
+    return std::make_pair(kernel_space, kernel_color_table);
+}
+
+inline void bilateral_filter(
+    const cv::Mat3b& src,
+    cv::Mat3b& dst,
+    const int ksize = 9,
+    const float sigma_space = 10.f,
+    const float sigma_color = 30.f
+) {
+    struct BilateralFilterCore : cv::ParallelLoopBody {
+        BilateralFilterCore(
+            const cv::Mat3b& src,
+            cv::Mat3b& dst,
+            const int radius,
+            const float sigma_space,
+            const float sigma_color)
+        : src_(src),
+          dst_(dst),
+          width_(src.cols),
+          height_(src.rows),
+          radius_(radius) {
+            const auto ksize = radius_ * 2 + 1;
+            const auto&& [kernel_space, kernel_color_table] = pre_compute_kernels(ksize, sigma_space, sigma_color);
+
+            get_kernel_space_ = [ksize, radius, &kernel_space](const int kx, const int ky) {
+                return kernel_space[(ky + radius) * ksize + (kx + radius)];
+            };
+
+            get_kernel_color_ = [&kernel_color_table](const cv::Vec3b& a, const cv::Vec3b& b) {
+                const auto diff0 = static_cast<int>(a[0]) - static_cast<int>(b[0]);
+                const auto diff1 = static_cast<int>(a[1]) - static_cast<int>(b[1]);
+                const auto diff2 = static_cast<int>(a[2]) - static_cast<int>(b[2]);
+                const auto color_distance = std::abs(diff0) + std::abs(diff1) + std::abs(diff2);
+                return kernel_color_table[color_distance];
+            };
+        }
+
+        void operator()(const cv::Range& range) const CV_OVERRIDE {
+            for (int r = range.start; r < range.end; r++) {
+                const auto x = r % src_.cols;
+                const auto y = r / src_.cols;
+
+                const auto src_center_pix = src_.at<cv::Vec3b>(y, x);
+                auto sum0 = 0.f;
+                auto sum1 = 0.f;
+                auto sum2 = 0.f;
+                auto sumk = 0.f;
+
+                for (int ky = -radius_; ky <= radius_; ky++) {
+                    for (int kx = -radius_; kx <= radius_; kx++) {
+                        const auto x_clamped = std::clamp(x + kx, 0, width_ - 1);
+                        const auto y_clamped = std::clamp(y + ky, 0, height_ - 1);
+                        const auto src_pix   = src_.at<cv::Vec3b>(y_clamped, x_clamped);
+                        const auto kernel    = get_kernel_space_(kx, ky) * get_kernel_color_(src_center_pix, src_pix);
+
+                        sum0 += src_pix[0] * kernel;
+                        sum1 += src_pix[1] * kernel;
+                        sum2 += src_pix[2] * kernel;
+                        sumk += kernel;
+                    }
+                }
+
+                dst_.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum0 / sumk);
+                dst_.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum1 / sumk);
+                dst_.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum2 / sumk);
+            }
+        }
+
+        const cv::Mat3b& src_;
+        cv::Mat3b& dst_;
+        const int width_;
+        const int height_;
+        const int radius_;
+
+        std::function<float(int, int)> get_kernel_space_;
+        std::function<float(cv::Vec3b, cv::Vec3b)> get_kernel_color_;
+    };
+
+    dst.create(src.size());
+    cv::parallel_for_(
+        cv::Range(0, src.rows * src.cols),
+        BilateralFilterCore(src, dst, ksize / 2, sigma_space, sigma_color)
+    );
 }
 
 inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide, cv::Mat3b& dst, const int ksize = 9,
                                    const float sigma_space = 10.f, const float sigma_color = 30.f) {
-    const auto width  = src.cols;
-    const auto height = src.rows;
-    const auto radius  = ksize / 2;
-    dst.create(src.size());
+    struct JointBilateralFilterCore : cv::ParallelLoopBody {
+        JointBilateralFilterCore(
+            const cv::Mat3b& src,
+            const cv::Mat3b& guide,
+            cv::Mat3b& dst,
+            const int radius,
+            const float sigma_space,
+            const float sigma_color)
+        : src_(src),
+          guide_(guide),
+          dst_(dst),
+          width_(src.cols),
+          height_(src.rows),
+          radius_(radius) {
+            const auto ksize = radius_ * 2 + 1;
+            const auto&& [kernel_space, kernel_color_table] = pre_compute_kernels(ksize, sigma_space, sigma_color);
 
-    const auto kernel_space = std::make_unique<float[]>(ksize * ksize);
-    for (int ky = -radius; ky <= radius; ky++) {
-        for (int kx = -radius; kx <= radius; kx++) {
-            const auto kidx = (ky + radius) * ksize + (kx + radius);
-            kernel_space[kidx] = std::exp(-(kx * kx + ky * ky) / (2 * sigma_space * sigma_space));
+            get_kernel_space_ = [ksize, radius, &kernel_space](const int kx, const int ky) {
+                return kernel_space[(ky + radius) * ksize + (kx + radius)];
+            };
+
+            get_kernel_color_ = [&kernel_color_table](const cv::Vec3b& a, const cv::Vec3b& b) {
+                const auto diff0 = static_cast<int>(a[0]) - static_cast<int>(b[0]);
+                const auto diff1 = static_cast<int>(a[1]) - static_cast<int>(b[1]);
+                const auto diff2 = static_cast<int>(a[2]) - static_cast<int>(b[2]);
+                const auto color_distance = std::abs(diff0) + std::abs(diff1) + std::abs(diff2);
+                return kernel_color_table[color_distance];
+            };
         }
-    }
 
-    static std::array<float, 255 * 255> kernel_color_table;
-    for (int i = 0; i < kernel_color_table.size(); i++) {
-        kernel_color_table[i] = std::exp(-i / (2 * sigma_color * sigma_color));
-    }
+        void operator()(const cv::Range& range) const CV_OVERRIDE {
+            for (int r = range.start; r < range.end; r++) {
+                const auto x = r % src_.cols;
+                const auto y = r / src_.cols;
 
-    const auto get_kernel_space = [ksize, radius, &kernel_space](const int kx, const int ky) {
-        return kernel_space[(ky + radius) * ksize + (kx + radius)];
-    };
+                const auto guide_center_pix = guide_.at<cv::Vec3b>(y, x);
+                auto sum0 = 0.f;
+                auto sum1 = 0.f;
+                auto sum2 = 0.f;
+                auto sumk = 0.f;
 
-    const auto get_kernel_color = [](const cv::Vec3b& a, const cv::Vec3b& b) {
-        const auto diff_b = static_cast<int>(a[0]) - static_cast<int>(b[0]);
-        const auto diff_g = static_cast<int>(a[1]) - static_cast<int>(b[1]);
-        const auto diff_r = static_cast<int>(a[2]) - static_cast<int>(b[2]);
-        const auto color_distance = (diff_b * diff_b + diff_g * diff_g + diff_r * diff_r) / 3;
-        return kernel_color_table[color_distance];
-    };
+                for (int ky = -radius_; ky <= radius_; ky++) {
+                    for (int kx = -radius_; kx <= radius_; kx++) {
+                        const auto x_clamped = std::clamp(x + kx, 0, width_ - 1);
+                        const auto y_clamped = std::clamp(y + ky, 0, height_ - 1);
+                        const auto src_pix   = src_.at<cv::Vec3b>(y_clamped, x_clamped);
+                        const auto guide_pix = guide_.at<cv::Vec3b>(y_clamped, x_clamped);
+                        const auto kernel    = get_kernel_space_(kx, ky) * get_kernel_color_(guide_center_pix, guide_pix);
 
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            const auto guide_center_bgr = guide.at<cv::Vec3b>(y, x);
-            auto sum_b = 0.f;
-            auto sum_g = 0.f;
-            auto sum_r = 0.f;
-            auto sum_k = 0.f;
-
-            for (int ky = -radius; ky <= radius; ky++) {
-                for (int kx = -radius; kx <= radius; kx++) {
-                    const auto x_clamped = std::clamp(x + kx, 0, width - 1);
-                    const auto y_clamped = std::clamp(y + ky, 0, height - 1);
-                    const auto bgr       = src.at<cv::Vec3b>(y_clamped, x_clamped);
-                    const auto guide_bgr = guide.at<cv::Vec3b>(y_clamped, x_clamped);
-                    const auto kernel    = get_kernel_space(kx, ky) * get_kernel_color(guide_center_bgr, guide_bgr);
-
-                    sum_b += bgr[0] * kernel;
-                    sum_g += bgr[1] * kernel;
-                    sum_r += bgr[2] * kernel;
-                    sum_k += kernel;
+                        sum0 += src_pix[0] * kernel;
+                        sum1 += src_pix[1] * kernel;
+                        sum2 += src_pix[2] * kernel;
+                        sumk += kernel;
+                    }
                 }
-            }
 
-            dst.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum_b / sum_k);
-            dst.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum_g / sum_k);
-            dst.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum_r / sum_k);
+                dst_.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum0 / sumk);
+                dst_.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum1 / sumk);
+                dst_.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum2 / sumk);
+            }
         }
-    }
+
+        const cv::Mat3b& src_;
+        const cv::Mat3b& guide_;
+        cv::Mat3b& dst_;
+        const int width_;
+        const int height_;
+        const int radius_;
+
+        std::function<float(int, int)> get_kernel_space_;
+        std::function<float(cv::Vec3b, cv::Vec3b)> get_kernel_color_;
+    };
+
+    dst.create(src.size());
+    cv::parallel_for_(
+        cv::Range(0, src.rows * src.cols),
+        JointBilateralFilterCore(src, guide, dst, ksize / 2, sigma_space, sigma_color)
+    );
 }
 
 } // anonymous namespace
