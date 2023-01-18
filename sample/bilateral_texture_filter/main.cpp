@@ -7,7 +7,7 @@
 #include "cuda/bilateral_texture_filter.hpp"
 
 int main(int argc, char** argv) {
-    if (argc < 2 || argc > 5) {
+    if (argc < 2) {
         std::cerr << "[Usage] ./bilateral_texture_filter filename [ksize] [nitr]" << std::endl;
         std::exit(EXIT_FAILURE);
     }
