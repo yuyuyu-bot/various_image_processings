@@ -9,8 +9,8 @@ namespace {
 
 inline auto pre_compute_kernels(const int ksize, const float sigma_space, const float sigma_color) {
     const auto radius  = ksize / 2;
-    const auto gauss_color_coeff = -1.f / (2 * sigma_color * sigma_color);
-    const auto gauss_space_coeff = -1.f / (2 * sigma_space * sigma_space);
+    const auto gauss_color_coeff = -1. / (2 * sigma_color * sigma_color);
+    const auto gauss_space_coeff = -1. / (2 * sigma_space * sigma_space);
 
     std::vector<float> kernel_space(ksize * ksize);
     for (int ky = -radius; ky <= radius; ky++) {
@@ -93,9 +93,9 @@ inline void bilateral_filter(
                     }
                 }
 
-                dst_.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum0 / sumk);
-                dst_.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum1 / sumk);
-                dst_.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum2 / sumk);
+                dst_.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum0 / sumk + 0.5f);
+                dst_.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum1 / sumk + 0.5f);
+                dst_.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum2 / sumk + 0.5f);
             }
         }
 
@@ -176,9 +176,9 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
                     }
                 }
 
-                dst_.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum0 / sumk);
-                dst_.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum1 / sumk);
-                dst_.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum2 / sumk);
+                dst_.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum0 / sumk + 0.5f);
+                dst_.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum1 / sumk + 0.5f);
+                dst_.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum2 / sumk + 0.5f);
             }
         }
 

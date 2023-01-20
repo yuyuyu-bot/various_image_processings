@@ -1,9 +1,8 @@
 #include <iostream>
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include "cuda/device_image.hpp"
-
-#include "cpp/bilateral_filter.hpp"
 #include "cuda/bilateral_filter.hpp"
 
 int main(int argc, char** argv) {
@@ -23,9 +22,9 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // cpp
-    cv::Mat3b dst_cpp;
-    bilateral_filter(input_image, dst_cpp, ksize, sigma_space, sigma_color);
+    // opencv
+    cv::Mat3b dst_opencv;
+    cv::bilateralFilter(input_image, dst_opencv, ksize, sigma_color, sigma_space, cv::BORDER_REPLICATE);
 
     // cuda
     DeviceImage<std::uint8_t> d_input_image(input_image.cols, input_image.rows, 3);
@@ -39,8 +38,22 @@ int main(int argc, char** argv) {
 
     // show result
     cv::imshow("input", input_image);
-    cv::imshow("cpp", dst_cpp);
+    cv::imshow("opencv", dst_opencv);
     cv::imshow("cuda", dst_cuda);
+
+    const auto count_non_zero = [](const cv::Mat3b& a, const cv::Mat3b& b) {
+        int count = 0;
+        for (int y = 0; y < a.rows; y++) {
+            for (int x = 0; x < a.cols; x++) {
+                if (a.ptr<cv::Vec3b>(y, x)[0] != b.ptr<cv::Vec3b>(y, x)[0] ||
+                    a.ptr<cv::Vec3b>(y, x)[1] != b.ptr<cv::Vec3b>(y, x)[1] ||
+                    a.ptr<cv::Vec3b>(y, x)[2] != b.ptr<cv::Vec3b>(y, x)[2]) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    };
 
     while (true) {
         const auto entered_key = cv::waitKey(0);
@@ -49,8 +62,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    cv::imwrite("bilateral_filter_cpp.png", dst_cpp);
     cv::imwrite("bilateral_filter_cuda.png", dst_cuda);
+    cv::imwrite("bilateral_filter_opencv.png", dst_opencv);
 
     return 0;
 }
