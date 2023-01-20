@@ -100,7 +100,6 @@ static void bench_bilateral_filter(
     d_dst.download(dst.ptr<std::uint8_t>());
 }
 
-
 static void bench_bilateral_texture_filter(
     const int measurement_times,
     const cv::Mat& input_image,
