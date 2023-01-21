@@ -161,7 +161,6 @@ inline void adaptive_bilateral_filter(
     );
 }
 
-
 } // anonymous namespace
 
 #endif // ADAPTIVE_BILATERAL_FILTER_HPP
