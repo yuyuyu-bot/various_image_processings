@@ -158,15 +158,15 @@ TEST(BilateralTextureFilterTest, ComputeBlurAndRTV) {
                 // blurred
                 const auto actual   = &actual_blurred[width * 3 * y + x * 3];
                 const auto expected = &expected_blurred[width * 3 * y + x * 3];
-                EXPECT_EQ(actual[0], expected[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
-                EXPECT_EQ(actual[1], expected[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
-                EXPECT_EQ(actual[2], expected[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+                EXPECT_FLOAT_EQ(actual[0], expected[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+                EXPECT_FLOAT_EQ(actual[1], expected[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+                EXPECT_FLOAT_EQ(actual[2], expected[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
             }
             {
                 // rtv
                 const auto actual   = actual_rtv[width * y + x];
                 const auto expected = expected_rtv[width * y + x];
-                EXPECT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
+                EXPECT_FLOAT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
             }
         }
     }

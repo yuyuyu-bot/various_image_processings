@@ -26,7 +26,7 @@ inline auto random_array<float>(const std::size_t len) {
 
     auto array = std::make_unique<float[]>(len);
     for (int i = 0; i < len; i++) {
-        array[i] = rand_gen() / std::numeric_limits<std::uint32_t>::max();
+        array[i] = static_cast<float>(rand_gen()) / std::numeric_limits<std::uint32_t>::max();
     }
 
     return array;

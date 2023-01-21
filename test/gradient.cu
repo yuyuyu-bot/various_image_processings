@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
+#include <opencv2/core.hpp>
 #include <thrust/device_vector.h>
 #include "random_array.hpp"
 
+#include "cpp/gradient.hpp"
 #include "cuda/gradient.hpp"
 
 template <typename SrcType>
@@ -33,7 +35,58 @@ void ref_gradient(const SrcType* const src, float* const dst, const int width, c
 
 struct GradientTest : ::testing::TestWithParam<int> {};
 
-TEST_P(GradientTest, random_u8) {
+TEST_P(GradientTest, cpp_random_u8) {
+    cv::setNumThreads(1);
+    using SrcType = std::uint8_t;
+    constexpr auto width  = 50;
+    constexpr auto height = 50;
+    const auto src_ch = GetParam();
+
+    const auto input_array = random_array<SrcType>(width * height * src_ch);
+    const auto actual_array = std::make_unique<float[]>(width * height);
+    const auto expected_array = std::make_unique<float[]>(width * height);
+
+    cv::Mat input_mat(height, width, CV_8UC(src_ch), input_array.get());
+    cv::Mat actual_mat(height, width, CV_32FC1, actual_array.get());
+    gradient(input_mat, actual_mat);
+
+    ref_gradient(input_array.get(), expected_array.get(), width, height, src_ch);
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const auto actual   = actual_array[width * y + x];
+            const auto expected = expected_array[width * y + x];
+            EXPECT_FLOAT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
+        }
+    }
+}
+
+TEST_P(GradientTest, cpp_random_f32) {
+    using SrcType = float;
+    constexpr auto width  = 50;
+    constexpr auto height = 50;
+    const auto src_ch = GetParam();
+
+    const auto input_array = random_array<SrcType>(width * height * src_ch);
+    const auto actual_array = std::make_unique<float[]>(width * height);
+    const auto expected_array = std::make_unique<float[]>(width * height);
+
+    cv::Mat input_mat(height, width, CV_32FC(src_ch), input_array.get());
+    cv::Mat actual_mat(height, width, CV_32FC1, actual_array.get());
+    gradient(input_mat, actual_mat);
+
+    ref_gradient(input_array.get(), expected_array.get(), width, height, src_ch);
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const auto actual   = actual_array[width * y + x];
+            const auto expected = expected_array[width * y + x];
+            EXPECT_FLOAT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
+        }
+    }
+}
+
+TEST_P(GradientTest, cuda_random_u8) {
     using SrcType = std::uint8_t;
     constexpr auto width  = 50;
     constexpr auto height = 50;
@@ -55,12 +108,12 @@ TEST_P(GradientTest, random_u8) {
         for (int x = 0; x < width; x++) {
             const auto actual   = actual_array[width * y + x];
             const auto expected = expected_array[width * y + x];
-            EXPECT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
+            EXPECT_FLOAT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
         }
     }
 }
 
-TEST_P(GradientTest, random_f32) {
+TEST_P(GradientTest, cuda_random_f32) {
     using SrcType = float;
     constexpr auto width  = 50;
     constexpr auto height = 50;
@@ -82,7 +135,7 @@ TEST_P(GradientTest, random_f32) {
         for (int x = 0; x < width; x++) {
             const auto actual   = actual_array[width * y + x];
             const auto expected = expected_array[width * y + x];
-            EXPECT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
+            EXPECT_FLOAT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
         }
     }
 }

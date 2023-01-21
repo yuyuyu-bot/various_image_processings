@@ -9,16 +9,18 @@
 
 namespace {
 
+namespace internal {
+
 template <typename ImgType, int ImgChannels>
-inline void gradient(
-    const cv::Mat_<cv::Vec<ImgType, ImgChannels>>& src,
-    cv::Mat1f& dst
+inline void gradient_impl(
+    const cv::Mat& src,
+    cv::Mat& dst
 ) {
     class ComputeGradient : public cv::ParallelLoopBody {
     public:
         ComputeGradient(
-            const cv::Mat_<cv::Vec<ImgType, ImgChannels>>& src,
-            cv::Mat1f& dst
+            const cv::Mat& src,
+            cv::Mat& dst
         ) : src_(src), dst_(dst) {}
 
         void compute_gradient_row(
@@ -56,10 +58,8 @@ inline void gradient(
             {
                 auto sum = 0.f;
                 for (int ch = 0; ch < ImgChannels; ch++) {
-                    const auto horizontal_diff =
-                        src_row[x * ImgChannels + ch] - src_row[(x - 1) * ImgChannels + ch];
-                    const auto vertical_diff =
-                        src_row_p1[x * ImgChannels + ch] - src_row_m1[x * ImgChannels + ch];
+                    const auto horizontal_diff = src_row[x * ImgChannels + ch] - src_row[(x - 1) * ImgChannels + ch];
+                    const auto vertical_diff = src_row_p1[x * ImgChannels + ch] - src_row_m1[x * ImgChannels + ch];
                     sum += horizontal_diff * horizontal_diff + vertical_diff * vertical_diff;
                 }
                 dst_row[x] = std::sqrt(static_cast<float>(sum));
@@ -77,16 +77,37 @@ inline void gradient(
         }
 
     private:
-        const cv::Mat3b& src_;
-        cv::Mat1f& dst_;
+        const cv::Mat& src_;
+        cv::Mat& dst_;
     };
 
-
-    dst.create(src.size());
+    dst.create(src.size(), CV_32FC1);
     cv::parallel_for_(cv::Range(0, src.rows), ComputeGradient(src, dst));
 }
 
-} // annonymous namespace
+} // namespace internal
 
+inline void gradient(
+    const cv::Mat& src,
+    cv::Mat& dst
+) {
+    if (src.type() == CV_8UC1) {
+        internal::gradient_impl<std::uint8_t, 1>(src, dst);
+    }
+    else if (src.type() == CV_8UC3) {
+        internal::gradient_impl<std::uint8_t, 3>(src, dst);
+    }
+    else if (src.type() == CV_32FC1) {
+        internal::gradient_impl<float, 1>(src, dst);
+    }
+    else if (src.type() == CV_32FC3) {
+        internal::gradient_impl<float, 3>(src, dst);
+    }
+    else {
+        std::cout << "Invalid src type." << std::endl;
+    }
+}
+
+} // annonymous namespace
 
 #endif // GRADIENT_HPP
