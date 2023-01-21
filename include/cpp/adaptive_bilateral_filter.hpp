@@ -95,12 +95,12 @@ inline void adaptive_bilateral_filter(
                 return kernel_space_[(ky + radius) * ksize + (kx + radius)];
             };
 
-            get_kernel_color_ = [this](const cv::Vec3b& a, const cv::Vec3b& b, const cv::Vec3i& offset) {
+            get_kernel_color_ = [this](const cv::Vec3b& a, const cv::Vec3b& b, const cv::Vec3f& offset) {
                 const auto diff0 = static_cast<int>(a[0]) - static_cast<int>(b[0]) - offset[0];
                 const auto diff1 = static_cast<int>(a[1]) - static_cast<int>(b[1]) - offset[1];
                 const auto diff2 = static_cast<int>(a[2]) - static_cast<int>(b[2]) - offset[2];
                 const auto color_distance = std::abs(diff0) + std::abs(diff1) + std::abs(diff2);
-                return kernel_color_table_[color_distance];
+                return kernel_color_table_[static_cast<int>(color_distance)];
             };
         }
 
@@ -109,10 +109,10 @@ inline void adaptive_bilateral_filter(
                 for (int x = 0; x < width_; x++) {
                     const auto src_center_pix = src_.at<cv::Vec3b>(r, x);
                     const auto src_sum = src_integral_.get(x - radius_, r - radius_, x + radius_, r + radius_);
-                    const auto del0 = src_center_pix[0] - src_sum[0] / (ksize_ * ksize_);
-                    const auto del1 = src_center_pix[1] - src_sum[1] / (ksize_ * ksize_);
-                    const auto del2 = src_center_pix[2] - src_sum[2] / (ksize_ * ksize_);
-                    cv::Vec3i offset(del0, del1, del2);
+                    const auto del0 = src_center_pix[0] - static_cast<float>(src_sum[0]) / (ksize_ * ksize_);
+                    const auto del1 = src_center_pix[1] - static_cast<float>(src_sum[1]) / (ksize_ * ksize_);
+                    const auto del2 = src_center_pix[2] - static_cast<float>(src_sum[2]) / (ksize_ * ksize_);
+                    cv::Vec3f offset(del0, del1, del2);
 
                     auto sum0 = 0.f;
                     auto sum1 = 0.f;
@@ -150,7 +150,7 @@ inline void adaptive_bilateral_filter(
         std::vector<float> kernel_space_;
         std::array<float, 512 * 3> kernel_color_table_;
         std::function<float(int, int)> get_kernel_space_;
-        std::function<float(cv::Vec3b, cv::Vec3b, cv::Vec3i)> get_kernel_color_;
+        std::function<float(cv::Vec3b, cv::Vec3b, cv::Vec3f)> get_kernel_color_;
     };
 
 

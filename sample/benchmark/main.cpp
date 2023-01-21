@@ -13,6 +13,7 @@
 #include "cuda/device_image.hpp"
 #include "cuda/gradient.hpp"
 #include "cuda/bilateral_filter.hpp"
+#include "cuda/adaptive_bilateral_filter.hpp"
 #include "cuda/bilateral_texture_filter.hpp"
 
 #define MEASURE(num_itr, fn, duration)                                                                                 \
@@ -141,6 +142,14 @@ static void bench_adaptive_bilateral_filter(
     float duration = 0.f;
     MEASURE(measurement_times, adaptive_bilateral_filter(input_image_color, dst, ksize), duration);
     print_duration("adaptive bilateral filter [cpp]", duration);
+
+    DeviceImage<std::uint8_t> d_input_image(input_image.cols, input_image.rows, 3);
+    DeviceImage<std::uint8_t> d_dst(input_image.cols, input_image.rows, 3);
+    d_input_image.upload(input_image_color.ptr<std::uint8_t>());
+    CudaAdaptiveBilateralFilter filter(input_image.cols, input_image.rows, ksize);
+
+    MEASURE(measurement_times, filter.execute(d_input_image.get(), d_dst.get()), duration);
+    print_duration("adaptive bilateral filter [cuda]", duration);
 }
 
 static void bench_bilateral_texture_filter(
