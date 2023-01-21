@@ -62,8 +62,5 @@ int main(int argc, char** argv) {
         }
     }
 
-    cv::imwrite("bilateral_filter_cuda.png", dst_cuda);
-    cv::imwrite("bilateral_filter_opencv.png", dst_opencv);
-
     return 0;
 }

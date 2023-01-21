@@ -5,11 +5,13 @@
 
 #include "toml.hpp"
 
-#include "cpp/adaptive_bilateral_filter.hpp"
+#include "cpp/gradient.hpp"
 #include "cpp/bilateral_filter.hpp"
+#include "cpp/adaptive_bilateral_filter.hpp"
 #include "cpp/bilateral_texture_filter.hpp"
 
 #include "cuda/device_image.hpp"
+#include "cuda/gradient.hpp"
 #include "cuda/bilateral_filter.hpp"
 #include "cuda/bilateral_texture_filter.hpp"
 
@@ -29,7 +31,7 @@ do {                                                                            
 } while (false)
 
 static void print_duration(const std::string& name, const float duration) {
-    std::printf("%-40s : %10.3f [msec]\n", name.c_str(), duration);
+    std::printf("%-40s : %10.6f [msec]\n", name.c_str(), duration);
 }
 
 struct Parameters {
@@ -37,11 +39,11 @@ struct Parameters {
 
     struct {
         int ksize = 9;
-    } AdaptiveBilateralFilter;
+    } BilateralFilter;
 
     struct {
         int ksize = 9;
-    } BilateralFilter;
+    } AdaptiveBilateralFilter;
 
     struct {
         int ksize = 9;
@@ -58,13 +60,13 @@ static auto parse_config(const std::string& filename) {
     // common
     params.execute_times = toml::find<int>(toml_all, "execute_times");
 
-    // adaptive bilateral filter
-    data = toml::find(toml_all, "AdaptiveBilateralFilter");
-    params.AdaptiveBilateralFilter.ksize = toml::find<int>(data, "ksize");
-
     // bilateral filter
     data = toml::find(toml_all, "BilateralFilter");
     params.BilateralFilter.ksize = toml::find<int>(data, "ksize");
+
+    // adaptive bilateral filter
+    data = toml::find(toml_all, "AdaptiveBilateralFilter");
+    params.AdaptiveBilateralFilter.ksize = toml::find<int>(data, "ksize");
 
     // bilateral texture filter
     data = toml::find(toml_all, "BilateralTextureFilter");
@@ -88,17 +90,23 @@ static auto convert_to_3ch(const cv::Mat& image) {
     return image_3ch;
 }
 
-static void bench_adaptive_bilateral_filter(
+static void bench_gradient(
     const int measurement_times,
-    const cv::Mat& input_image,
-    const int ksize
+    const cv::Mat& input_image
 ) {
     const cv::Mat3b input_image_color = convert_to_3ch(input_image);
-    cv::Mat3b dst(input_image_color.size());
+    cv::Mat1f dst(input_image_color.size());
 
     float duration = 0.f;
-    MEASURE(measurement_times, adaptive_bilateral_filter(input_image_color, dst, ksize), duration);
-    print_duration("adaptive bilateral filter [cpp]", duration);
+    MEASURE(measurement_times, gradient(input_image_color, dst), duration);
+    print_duration("gradient [cpp]", duration);
+
+    DeviceImage<std::uint8_t> d_input_image(input_image.cols, input_image.rows, 3);
+    DeviceImage<float> d_dst(input_image.cols, input_image.rows);
+    d_input_image.upload(input_image_color.ptr<std::uint8_t>());
+
+    MEASURE(measurement_times, cuda_gradient(d_input_image.get(), d_dst.get(), input_image.cols, input_image.rows, 3), duration);
+    print_duration("gradient [cuda]", duration);
 }
 
 static void bench_bilateral_filter(
@@ -120,6 +128,19 @@ static void bench_bilateral_filter(
 
     MEASURE(measurement_times, filter.bilateral_filter(d_input_image.get(), d_dst.get()), duration);
     print_duration("bilateral filter [cuda]", duration);
+}
+
+static void bench_adaptive_bilateral_filter(
+    const int measurement_times,
+    const cv::Mat& input_image,
+    const int ksize
+) {
+    const cv::Mat3b input_image_color = convert_to_3ch(input_image);
+    cv::Mat3b dst(input_image_color.size());
+
+    float duration = 0.f;
+    MEASURE(measurement_times, adaptive_bilateral_filter(input_image_color, dst, ksize), duration);
+    print_duration("adaptive bilateral filter [cpp]", duration);
 }
 
 static void bench_bilateral_texture_filter(
@@ -160,20 +181,16 @@ int main(int argc, char** argv) {
     std::cout << "\twidth         : " << input_image.cols << std::endl;
     std::cout << "\theight        : " << input_image.rows << std::endl;
     std::cout << "\texecute times : " << params.execute_times << std::endl;
-    std::cout << "\t[adaptive bilateral filter] ksize : " << params.AdaptiveBilateralFilter.ksize << std::endl;
     std::cout << "\t[bilateral filter]          ksize : " << params.BilateralFilter.ksize << std::endl;
+    std::cout << "\t[adaptive bilateral filter] ksize : " << params.AdaptiveBilateralFilter.ksize << std::endl;
     std::cout << "\t[bilateral texture filter]  ksize : " << params.BilateralTextureFilter.ksize << std::endl;
     std::cout << "\t[bilateral texture filter]  nitr  : " << params.BilateralTextureFilter.nitr << std::endl;
     std::cout << std::endl;
 
-    bench_adaptive_bilateral_filter(
-        params.execute_times, input_image, params.AdaptiveBilateralFilter.ksize);
-
-    bench_bilateral_filter(
-        params.execute_times, input_image, params.BilateralFilter.ksize);
-
-    bench_bilateral_texture_filter(
-        params.execute_times, input_image, params.BilateralTextureFilter.ksize, params.BilateralTextureFilter.nitr);
+    bench_gradient(params.execute_times, input_image);
+    bench_bilateral_filter(params.execute_times, input_image, params.BilateralFilter.ksize);
+    bench_adaptive_bilateral_filter(params.execute_times, input_image, params.AdaptiveBilateralFilter.ksize);
+    bench_bilateral_texture_filter(params.execute_times, input_image, params.BilateralTextureFilter.ksize, params.BilateralTextureFilter.nitr);
 
     return 0;
 }

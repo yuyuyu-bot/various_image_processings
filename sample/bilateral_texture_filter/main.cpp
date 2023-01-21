@@ -48,8 +48,5 @@ int main(int argc, char** argv) {
         }
     }
 
-    cv::imwrite("bilateral_texture_filter_cpp.png", dst_cpp);
-    cv::imwrite("bilateral_texture_filter_cuda.png", dst_cuda);
-
     return 0;
 }

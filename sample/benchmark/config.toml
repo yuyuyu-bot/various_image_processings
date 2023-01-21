@@ -1,9 +1,9 @@
 execute_times = 50
 
-[AdaptiveBilateralFilter]
+[BilateralFilter]
 ksize = 9
 
-[BilateralFilter]
+[AdaptiveBilateralFilter]
 ksize = 9
 
 [BilateralTextureFilter]
