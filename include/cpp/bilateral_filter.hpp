@@ -7,6 +7,8 @@
 
 namespace {
 
+namespace internal {
+
 template <int ColorTableSize = 256 * 3>
 inline auto pre_compute_kernels(const int ksize, const float sigma_space, const float sigma_color) {
     const auto radius  = ksize / 2;
@@ -34,6 +36,8 @@ inline auto pre_compute_kernels(const int ksize, const float sigma_space, const 
     return std::make_pair(kernel_space, kernel_color_table);
 }
 
+} // namespace internal
+
 inline void bilateral_filter(
     const cv::Mat3b& src,
     cv::Mat3b& dst,
@@ -54,7 +58,7 @@ inline void bilateral_filter(
           height_(src.rows),
           radius_(radius) {
             const auto ksize = radius_ * 2 + 1;
-            std::tie(kernel_space_, kernel_color_table_) = pre_compute_kernels(ksize, sigma_space, sigma_color);
+            std::tie(kernel_space_, kernel_color_table_) = internal::pre_compute_kernels(ksize, sigma_space, sigma_color);
 
             get_kernel_space_ = [ksize, radius, this](const int kx, const int ky) {
                 return kernel_space_[(ky + radius) * ksize + (kx + radius)];
@@ -136,7 +140,7 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
           height_(src.rows),
           radius_(radius) {
             const auto ksize = radius_ * 2 + 1;
-            std::tie(kernel_space_, kernel_color_table_) = pre_compute_kernels(ksize, sigma_space, sigma_color);
+            std::tie(kernel_space_, kernel_color_table_) = internal::pre_compute_kernels(ksize, sigma_space, sigma_color);
 
             get_kernel_space_ = [ksize, this](const int kx, const int ky) {
                 return kernel_space_[(ky + radius_) * ksize + (kx + radius_)];

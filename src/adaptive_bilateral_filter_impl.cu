@@ -87,9 +87,9 @@ __global__ void adaptive_bilateral_filter_kernel(
 
     const auto src_center_pix = src + stride_3ch * y + x * 3;
     float offset[3] = {
-        src_center_pix[0] - static_cast<float>(sum0) / (ksize * ksize),
-        src_center_pix[1] - static_cast<float>(sum1) / (ksize * ksize),
-        src_center_pix[2] - static_cast<float>(sum2) / (ksize * ksize)
+        src_center_pix[0] - sum0 / (ksize * ksize),
+        src_center_pix[1] - sum1 / (ksize * ksize),
+        src_center_pix[2] - sum2 / (ksize * ksize)
     };
 
     sum0 = 0.f;

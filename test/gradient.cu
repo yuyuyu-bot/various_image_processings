@@ -140,4 +140,4 @@ TEST_P(GradientTest, CudaRandomF32) {
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(GradientTest, GradientTest, testing::Values(1, 3));
+INSTANTIATE_TEST_SUITE_P(ParametrizeKernelSize, GradientTest, testing::Values(1, 3));

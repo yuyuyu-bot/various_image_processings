@@ -25,8 +25,8 @@ public:
 
         for (int y = 1; y < height_; y++) {
             for (int x = 1; x < width_; x++) {
-                const auto src_x = std::clamp(x - 1 - radius, 0, src.cols);
-                const auto src_y = std::clamp(y - 1 - radius, 0, src.rows);
+                const auto src_x = std::clamp(x - 1 - radius, 0, src.cols - 1);
+                const auto src_y = std::clamp(y - 1 - radius, 0, src.rows - 1);
 
                 for (int ch = 0; ch < channels_; ch++) {
                     buffer_.at<cv::Vec3i>(y, x)[ch] = src.at<cv::Vec3b>(src_y, src_x)[ch];
@@ -55,7 +55,7 @@ public:
         return buffer_.at<cv::Vec3i>(y1 + radius_ + 1, x1 + radius_ + 1) -
                buffer_.at<cv::Vec3i>(y1 + radius_ + 1, x0 + radius_    ) -
                buffer_.at<cv::Vec3i>(y0 + radius_    , x1 + radius_ + 1) +
-               buffer_.at<cv::Vec3i>(y0+ radius_     , x0 + radius_    );
+               buffer_.at<cv::Vec3i>(y0 + radius_    , x0 + radius_    );
     }
 
 private:
@@ -89,7 +89,7 @@ inline void adaptive_bilateral_filter(
           ksize_(radius * 2 + 1),
           radius_(radius),
           src_integral_(src, radius) {
-            std::tie(kernel_space_, kernel_color_table_) = pre_compute_kernels<512 * 3>(ksize_, sigma_space, sigma_color);
+            std::tie(kernel_space_, kernel_color_table_) = internal::pre_compute_kernels<512 * 3>(ksize_, sigma_space, sigma_color);
 
             get_kernel_space_ = [ksize=this->ksize_, radius, this](const int kx, const int ky) {
                 return kernel_space_[(ky + radius) * ksize + (kx + radius)];
