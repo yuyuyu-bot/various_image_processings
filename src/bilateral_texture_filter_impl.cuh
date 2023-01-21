@@ -16,10 +16,6 @@ public:
         const std::uint8_t* const d_src,
         std::uint8_t* const d_dst);
 
-    void compute_magnitude(
-        const thrust::device_vector<std::uint8_t>& d_image,
-        thrust::device_vector<float>& d_magnitude);
-
     void compute_blur_and_rtv(
         const thrust::device_vector<std::uint8_t>& d_image,
         const thrust::device_vector<float>& d_magnitude,

@@ -7,62 +7,6 @@
 
 static constexpr auto epsilon = 1e-9;
 
-__global__ void compute_magnitude_kernel(
-    const std::uint8_t* const image,
-    float* const magnitude,
-    const int width,
-    const int height
-) {
-    const int x = blockDim.x * blockIdx.x + threadIdx.x;
-    const int y = blockDim.y * blockIdx.y + threadIdx.y;
-    const int tx = threadIdx.x;
-    const int ty = threadIdx.y;
-    const int stride_3ch = width * 3;
-    const int stride = width;
-
-    extern __shared__ std::uint8_t s_image_buffer[];
-    const int smem_width  = blockDim.x + 2;
-    const int smem_height = blockDim.y + 2;
-    const int smem_stride = smem_width * 3;
-    const int smem_origin_x = x - tx - 1;
-    const int smem_origin_y = y - ty - 1;
-
-    const auto get_s_img_ptr = [smem_stride, smem_origin_x, smem_origin_y](const int img_x, const int img_y) {
-        const auto s_img_x = img_x - smem_origin_x;
-        const auto s_img_y = img_y - smem_origin_y;
-        return &s_image_buffer[smem_stride * s_img_y + s_img_x * 3];
-    };
-
-    for (int y_offset = ty; y_offset < smem_height; y_offset += blockDim.y) {
-        for (int x_offset = tx; x_offset < smem_width; x_offset += blockDim.x) {
-            auto* const s_img_ptr = get_s_img_ptr(smem_origin_x + x_offset, smem_origin_y + y_offset);
-            const auto x_clamped = clamp(smem_origin_x + x_offset, 0, width - 1);
-            const auto y_clamped = clamp(smem_origin_y + y_offset, 0, height - 1);
-            s_img_ptr[0] = image[stride_3ch * y_clamped + x_clamped * 3 + 0];
-            s_img_ptr[1] = image[stride_3ch * y_clamped + x_clamped * 3 + 1];
-            s_img_ptr[2] = image[stride_3ch * y_clamped + x_clamped * 3 + 2];
-        }
-    }
-    __syncthreads();
-
-    if (x >= width || y >= height) {
-        return;
-    }
-
-    const auto compute_del = [&get_s_img_ptr, stride_3ch](const int x0, const int y0, const int x1, const int y1) {
-        const auto* const s_img_ptr0 = get_s_img_ptr(x0, y0);
-        const auto* const s_img_ptr1 = get_s_img_ptr(x1, y1);
-        const auto diff0 = s_img_ptr0[0] - s_img_ptr1[0];
-        const auto diff1 = s_img_ptr0[1] - s_img_ptr1[1];
-        const auto diff2 = s_img_ptr0[2] - s_img_ptr1[2];
-        return diff0 * diff0 + diff1 * diff1 + diff2 * diff2;
-    };
-
-    const auto del_x = compute_del(x - 1, y, x + 1, y);
-    const auto del_y = compute_del(x, y - 1, x, y + 1);
-    magnitude[stride * y + x] = sqrtf(del_x + del_y);
-}
-
 __global__ void compute_blur_and_rtv_kernel(
     const std::uint8_t* const image,
     const float* const magnitude,
@@ -264,24 +208,6 @@ void CudaBilateralTextureFilter::Impl::execute(
     }
 
     thrust::copy(d_dst_n_.begin(), d_dst_n_.end(), d_dst);
-}
-
-void CudaBilateralTextureFilter::Impl::compute_magnitude(
-    const thrust::device_vector<std::uint8_t>& d_image,
-    thrust::device_vector<float>& d_magnitude
-) {
-    const std::uint32_t block_width  = 16u;
-    const std::uint32_t block_height = 16u;
-    const std::uint32_t grid_width   = (width_  + block_width  - 1) / block_width;
-    const std::uint32_t grid_height  = (height_ + block_height - 1) / block_height;
-
-    const dim3 grid_dim (grid_width, grid_height);
-    const dim3 block_dim(block_width, block_height);
-    const std::uint32_t smem_size = (block_width + 2) * (block_height + 2) * 3 * sizeof(std::uint8_t);
-
-    compute_magnitude_kernel<<<grid_dim, block_dim, smem_size>>>(
-        d_image.data().get(), d_magnitude.data().get(), width_, height_);
-    CUDASafeCall();
 }
 
 void CudaBilateralTextureFilter::Impl::compute_blur_and_rtv(
