@@ -75,9 +75,9 @@ private:
 
         void operator()(const cv::Range& range) const CV_OVERRIDE {
             for (int r = range.start; r < range.end; r++) {
-                const auto x = r % image_.cols;
-                const auto y = r / image_.cols;
-                compute_blur_and_rtv_pixel(image_, magnitude_, blurred_, rtv_, ksize_, x, y);
+                for (int x = 0; x < image_.cols; x++) {
+                    compute_blur_and_rtv_pixel(image_, magnitude_, blurred_, rtv_, ksize_, x, r);
+                }
             }
         }
 
@@ -93,7 +93,7 @@ private:
                               const int ksize) {
         blurred.create(image.size());
         rtv.create(image.size());
-        cv::parallel_for_(cv::Range(0, image.rows * image.cols), ComputeBlurAndRTV(image, magnitude, blurred, rtv, ksize));
+        cv::parallel_for_(cv::Range(0, image.rows), ComputeBlurAndRTV(image, magnitude, blurred, rtv, ksize));
     }
 
     class ComputeGuide : public cv::ParallelLoopBody {
@@ -137,9 +137,9 @@ private:
 
         void operator()(const cv::Range& range) const CV_OVERRIDE {
             for (int r = range.start; r < range.end; r++) {
-                const auto x = r % blurred_.cols;
-                const auto y = r / blurred_.cols;
-                compute_guide_pixel(blurred_, rtv_, guide_, ksize_, x, y);
+                for (int x = 0; x < blurred_.cols; x++) {
+                    compute_guide_pixel(blurred_, rtv_, guide_, ksize_, x, r);
+                }
             }
         }
 
@@ -152,7 +152,7 @@ private:
 
     void compute_guide(const cv::Mat3f& blurred, const cv::Mat1f& rtv, cv::Mat3b& guide, const int ksize) {
         guide.create(blurred.size());
-        cv::parallel_for_(cv::Range(0, blurred.rows * blurred.cols), ComputeGuide(blurred, rtv, guide, ksize));
+        cv::parallel_for_(cv::Range(0, blurred.rows), ComputeGuide(blurred, rtv, guide, ksize));
     }
 
 private:

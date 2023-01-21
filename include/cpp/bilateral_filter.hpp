@@ -7,6 +7,7 @@
 
 namespace {
 
+template <int ColorTableSize = 256 * 3>
 inline auto pre_compute_kernels(const int ksize, const float sigma_space, const float sigma_color) {
     const auto radius  = ksize / 2;
     const auto gauss_color_coeff = -1. / (2 * sigma_color * sigma_color);
@@ -25,7 +26,7 @@ inline auto pre_compute_kernels(const int ksize, const float sigma_space, const 
         }
     }
 
-    std::array<float, 256 * 3> kernel_color_table;
+    std::array<float, ColorTableSize> kernel_color_table;
     for (int i = 0; i < kernel_color_table.size(); i++) {
         kernel_color_table[i] = std::exp((i * i) * gauss_color_coeff);
     }
@@ -152,33 +153,32 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
 
         void operator()(const cv::Range& range) const CV_OVERRIDE {
             for (int r = range.start; r < range.end; r++) {
-                const auto x = r % src_.cols;
-                const auto y = r / src_.cols;
+                for (int x = 0; x < width_; x++) {
+                    const auto guide_center_pix = guide_.at<cv::Vec3b>(r, x);
+                    auto sum0 = 0.f;
+                    auto sum1 = 0.f;
+                    auto sum2 = 0.f;
+                    auto sumk = 0.f;
 
-                const auto guide_center_pix = guide_.at<cv::Vec3b>(y, x);
-                auto sum0 = 0.f;
-                auto sum1 = 0.f;
-                auto sum2 = 0.f;
-                auto sumk = 0.f;
+                    for (int ky = -radius_; ky <= radius_; ky++) {
+                        for (int kx = -radius_; kx <= radius_; kx++) {
+                            const auto x_clamped = std::clamp(x + kx, 0, width_ - 1);
+                            const auto y_clamped = std::clamp(r + ky, 0, height_ - 1);
+                            const auto src_pix   = src_.at<cv::Vec3b>(y_clamped, x_clamped);
+                            const auto guide_pix = guide_.at<cv::Vec3b>(y_clamped, x_clamped);
+                            const auto kernel    = get_kernel_space_(kx, ky) * get_kernel_color_(guide_center_pix, guide_pix);
 
-                for (int ky = -radius_; ky <= radius_; ky++) {
-                    for (int kx = -radius_; kx <= radius_; kx++) {
-                        const auto x_clamped = std::clamp(x + kx, 0, width_ - 1);
-                        const auto y_clamped = std::clamp(y + ky, 0, height_ - 1);
-                        const auto src_pix   = src_.at<cv::Vec3b>(y_clamped, x_clamped);
-                        const auto guide_pix = guide_.at<cv::Vec3b>(y_clamped, x_clamped);
-                        const auto kernel    = get_kernel_space_(kx, ky) * get_kernel_color_(guide_center_pix, guide_pix);
-
-                        sum0 += src_pix[0] * kernel;
-                        sum1 += src_pix[1] * kernel;
-                        sum2 += src_pix[2] * kernel;
-                        sumk += kernel;
+                            sum0 += src_pix[0] * kernel;
+                            sum1 += src_pix[1] * kernel;
+                            sum2 += src_pix[2] * kernel;
+                            sumk += kernel;
+                        }
                     }
-                }
 
-                dst_.at<cv::Vec3b>(y, x)[0] = static_cast<std::uint8_t>(sum0 / sumk + 0.5f);
-                dst_.at<cv::Vec3b>(y, x)[1] = static_cast<std::uint8_t>(sum1 / sumk + 0.5f);
-                dst_.at<cv::Vec3b>(y, x)[2] = static_cast<std::uint8_t>(sum2 / sumk + 0.5f);
+                    dst_.at<cv::Vec3b>(r, x)[0] = static_cast<std::uint8_t>(sum0 / sumk + 0.5f);
+                    dst_.at<cv::Vec3b>(r, x)[1] = static_cast<std::uint8_t>(sum1 / sumk + 0.5f);
+                    dst_.at<cv::Vec3b>(r, x)[2] = static_cast<std::uint8_t>(sum2 / sumk + 0.5f);
+                }
             }
         }
 
@@ -195,7 +195,7 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
 
     dst.create(src.size());
     cv::parallel_for_(
-        cv::Range(0, src.rows * src.cols),
+        cv::Range(0, src.rows),
         JointBilateralFilterCore(src, guide, dst, ksize / 2, sigma_space, sigma_color)
     );
 }

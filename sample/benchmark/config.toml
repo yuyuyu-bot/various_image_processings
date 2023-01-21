@@ -1,8 +1,11 @@
-execute_times = 300
+execute_times = 50
+
+[AdaptiveBilateralFilter]
+ksize = 9
 
 [BilateralFilter]
-ksize       = 9
+ksize = 9
 
 [BilateralTextureFilter]
-ksize       = 9
-nitr        = 3
+ksize = 9
+nitr  = 3
