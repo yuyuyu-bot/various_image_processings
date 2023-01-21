@@ -8,6 +8,8 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/ximgproc/edge_filter.hpp>
 
+#include "gradient.hpp"
+
 class BilateralTextureFilterImpl {
 public:
     void execute(const cv::Mat3b& src, cv::Mat3b& dst, const int ksize = 9, const int nitr = 3) {
@@ -16,7 +18,7 @@ public:
 
         for (int itr = 0; itr < nitr; itr++) {
             dst.copyTo(src_n);
-            compute_magnitude(src_n, magnitude_);
+            gradient(src_n, magnitude_);
             compute_blur_and_rtv(src_n, magnitude_, blurred_, rtv_, ksize);
             compute_guide(blurred_, rtv_, guide_, ksize);
             cv::ximgproc::jointBilateralFilter(guide_, src_n, dst, 2 * ksize - 1, std::sqrt(3), ksize - 1);
@@ -24,46 +26,6 @@ public:
     }
 
 private:
-    class ComputeMagnitude : public cv::ParallelLoopBody {
-    public:
-        ComputeMagnitude(const cv::Mat3b& image, cv::Mat1f& magnitude) : image_(image), magnitude_(magnitude) {}
-
-        auto compute_del(const cv::Mat3b& image, const int x0, const int y0, const int x1, const int y1) const {
-            const auto diff_b = image.at<cv::Vec3b>(y0, x0)[0] - image.at<cv::Vec3b>(y1, x1)[0];
-            const auto diff_g = image.at<cv::Vec3b>(y0, x0)[1] - image.at<cv::Vec3b>(y1, x1)[1];
-            const auto diff_r = image.at<cv::Vec3b>(y0, x0)[2] - image.at<cv::Vec3b>(y1, x1)[2];
-            return diff_b * diff_b + diff_g * diff_g + diff_r * diff_r;
-        }
-
-        void compute_magnitude_pixel(const cv::Mat3b& image, cv::Mat1f& magnitude, const int x, const int y) const {
-            if (x == 0 || x == image.cols - 1 || y == 0 || y == image.rows - 1) {
-                magnitude.at<float>(y, x) = 0.f;
-                return;
-            }
-
-            const auto del_x = compute_del(image, x - 1, y, x + 1, y);
-            const auto del_y = compute_del(image, x, y - 1, x, y + 1);
-            magnitude.at<float>(y, x) = std::sqrt(del_x + del_y);
-        }
-
-        void operator()(const cv::Range& range) const CV_OVERRIDE {
-            for (int r = range.start; r < range.end; r++) {
-                const auto x = r % image_.cols;
-                const auto y = r / image_.cols;
-                compute_magnitude_pixel(image_, magnitude_, x, y);
-            }
-        }
-
-    private:
-        const cv::Mat3b& image_;
-        cv::Mat1f& magnitude_;
-    };
-
-    void compute_magnitude(const cv::Mat3b& image, cv::Mat1f& magnitude) {
-        magnitude.create(image.size());
-        cv::parallel_for_(cv::Range(0, image.rows * image.cols), ComputeMagnitude(image, magnitude));
-    }
-
     class ComputeBlurAndRTV : public cv::ParallelLoopBody {
     public:
         ComputeBlurAndRTV(
