@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "random_array.hpp"
 
+#include "cpp/bilateral_filter.hpp"
 #include "bilateral_filter_impl.cuh"
 
 class RefBilateralFilterImpl {
@@ -160,7 +161,64 @@ public:
     }
 };
 
-TEST(BilateralFilterTest, BilateralFilter) {
+TEST(BilateralFilterTest, CppBilateralFilter) {
+    constexpr auto width  = 50;
+    constexpr auto height = 50;
+    constexpr auto len    = width * height * 3;
+
+    const auto src      = random_array<std::uint8_t>(len);
+    const auto actual   = std::make_unique<std::uint8_t[]>(len);
+    const auto expected = std::make_unique<std::uint8_t[]>(len);
+
+    cv::Mat3b src_mat(height, width, reinterpret_cast<cv::Vec3b*>(src.get()));
+    cv::Mat3b actual_mat(height, width, reinterpret_cast<cv::Vec3b*>(actual.get()));
+    bilateral_filter(src_mat, actual_mat);
+
+    RefBilateralFilterImpl ref_impl(width, height);
+    ref_impl.bilateral_filter(src.get(), expected.get());
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const auto actual_ptr   = &actual[width * 3 * y + x * 3];
+            const auto expected_ptr = &expected[width * 3 * y + x * 3];
+            EXPECT_FLOAT_EQ(actual_ptr[0], expected_ptr[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[1], expected_ptr[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[2], expected_ptr[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+        }
+    }
+}
+
+TEST(BilateralFilterTest, CppJointBilateralFilter) {
+    constexpr auto width  = 50;
+    constexpr auto height = 50;
+    constexpr auto len    = width * height * 3;
+
+    const auto src      = random_array<std::uint8_t>(len);
+    const auto guide    = random_array<std::uint8_t>(len);
+    const auto actual   = std::make_unique<std::uint8_t[]>(len);
+    const auto expected = std::make_unique<std::uint8_t[]>(len);
+
+    cv::Mat3b src_mat(height, width, reinterpret_cast<cv::Vec3b*>(src.get()));
+    cv::Mat3b guide_mat(height, width, reinterpret_cast<cv::Vec3b*>(guide.get()));
+    cv::Mat3b actual_mat(height, width, reinterpret_cast<cv::Vec3b*>(actual.get()));
+    joint_bilateral_filter(src_mat, guide_mat, actual_mat);
+
+    RefBilateralFilterImpl ref_impl(width, height);
+    ref_impl.joint_bilateral_filter(src.get(), guide.get(), expected.get());
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const auto actual_ptr   = &actual[width * 3 * y + x * 3];
+            const auto expected_ptr = &expected[width * 3 * y + x * 3];
+            EXPECT_FLOAT_EQ(actual_ptr[0], expected_ptr[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[1], expected_ptr[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[2], expected_ptr[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+        }
+    }
+}
+
+
+TEST(BilateralFilterTest, CudaBilateralFilter) {
     constexpr auto width  = 50;
     constexpr auto height = 50;
     constexpr auto len    = width * height * 3;
@@ -183,17 +241,14 @@ TEST(BilateralFilterTest, BilateralFilter) {
         for (int x = 0; x < width; x++) {
             const auto actual_ptr   = &actual[width * 3 * y + x * 3];
             const auto expected_ptr = &expected[width * 3 * y + x * 3];
-            const auto diff0 = std::abs(static_cast<int>(actual_ptr[0]) - static_cast<int>(expected_ptr[0]));
-            const auto diff1 = std::abs(static_cast<int>(actual_ptr[1]) - static_cast<int>(expected_ptr[1]));
-            const auto diff2 = std::abs(static_cast<int>(actual_ptr[2]) - static_cast<int>(expected_ptr[2]));
-            EXPECT_LE(diff0, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
-            EXPECT_LE(diff1, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
-            EXPECT_LE(diff2, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[0], expected_ptr[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[1], expected_ptr[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[2], expected_ptr[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
         }
     }
 }
 
-TEST(BilateralFilterTest, JointBilateralFilter) {
+TEST(BilateralFilterTest, CudaJointBilateralFilter) {
     constexpr auto width  = 50;
     constexpr auto height = 50;
     constexpr auto len    = width * height * 3;
@@ -219,12 +274,9 @@ TEST(BilateralFilterTest, JointBilateralFilter) {
         for (int x = 0; x < width; x++) {
             const auto actual_ptr   = &actual[width * 3 * y + x * 3];
             const auto expected_ptr = &expected[width * 3 * y + x * 3];
-            const auto diff0 = std::abs(static_cast<int>(actual_ptr[0]) - static_cast<int>(expected_ptr[0]));
-            const auto diff1 = std::abs(static_cast<int>(actual_ptr[1]) - static_cast<int>(expected_ptr[1]));
-            const auto diff2 = std::abs(static_cast<int>(actual_ptr[2]) - static_cast<int>(expected_ptr[2]));
-            EXPECT_LE(diff0, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
-            EXPECT_LE(diff1, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
-            EXPECT_LE(diff2, 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[0], expected_ptr[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[1], expected_ptr[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_FLOAT_EQ(actual_ptr[2], expected_ptr[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
         }
     }
 }

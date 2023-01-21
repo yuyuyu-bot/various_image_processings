@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
+#include <opencv2/core.hpp>
 #include "random_array.hpp"
 
+#include "cpp/bilateral_texture_filter.hpp"
 #include "bilateral_texture_filter_impl.cuh"
 
 class RefBilateralTextureFilterImpl {
@@ -127,7 +129,77 @@ public:
     }
 };
 
-TEST(BilateralTextureFilterTest, ComputeBlurAndRTV) {
+TEST(BilateralTextureFilterTest, CppComputeBlurAndRTV) {
+    constexpr auto width  = 50;
+    constexpr auto height = 50;
+    constexpr auto ksize  = 9;
+
+    const auto input_image      = random_array<std::uint8_t>(width * height * 3);
+    const auto input_magnitude  = random_array<float>(width * height);
+    const auto actual_blurred   = std::make_unique<float[]>(width * height * 3);
+    const auto actual_rtv       = std::make_unique<float[]>(width * height);
+    const auto expected_blurred = std::make_unique<float[]>(width * height * 3);
+    const auto expected_rtv     = std::make_unique<float[]>(width * height);
+
+    cv::Mat3b input_mat(height, width, reinterpret_cast<cv::Vec3b*>(input_image.get()));
+    cv::Mat1f magnitude_mat(height, width, input_magnitude.get());
+    cv::Mat3f blurred_mat(height, width, reinterpret_cast<cv::Vec3f*>(actual_blurred.get()));
+    cv::Mat1f rtv_mat(height, width, actual_rtv.get());
+    internal::compute_blur_and_rtv(input_mat, magnitude_mat, blurred_mat, rtv_mat, ksize);
+
+    RefBilateralTextureFilterImpl ref_impl(width, height, ksize);
+    ref_impl.compute_blur_and_rtv(input_image.get(), input_magnitude.get(), expected_blurred.get(), expected_rtv.get());
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            {
+                // blurred
+                const auto actual   = &actual_blurred[width * 3 * y + x * 3];
+                const auto expected = &expected_blurred[width * 3 * y + x * 3];
+                EXPECT_FLOAT_EQ(actual[0], expected[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+                EXPECT_FLOAT_EQ(actual[1], expected[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+                EXPECT_FLOAT_EQ(actual[2], expected[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+            }
+            {
+                // rtv
+                const auto actual   = actual_rtv[width * y + x];
+                const auto expected = expected_rtv[width * y + x];
+                EXPECT_FLOAT_EQ(actual, expected) << "(x, y) = (" << x << ", " << y << ")";
+            }
+        }
+    }
+}
+
+TEST(BilateralTextureFilterTest, CppComputeGuide) {
+    constexpr auto width  = 50;
+    constexpr auto height = 50;
+    constexpr auto ksize  = 9;
+
+    const auto input_blurred  = random_array<float>(width * height * 3);
+    const auto input_rtv      = random_array<float>(width * height);
+    const auto actual_guide   = std::make_unique<std::uint8_t[]>(width * height * 3);
+    const auto expected_guide = std::make_unique<std::uint8_t[]>(width * height * 3);
+
+    cv::Mat3f blurred_mat(height, width, reinterpret_cast<cv::Vec3f*>(input_blurred.get()));
+    cv::Mat1f rtv_mat(height, width, input_rtv.get());
+    cv::Mat3b guide_mat(height, width, reinterpret_cast<cv::Vec3b*>(actual_guide.get()));
+    internal::compute_guide(blurred_mat, rtv_mat, guide_mat, ksize);
+
+    RefBilateralTextureFilterImpl ref_impl(width, height, ksize);
+    ref_impl.compute_guide(input_blurred.get(), input_rtv.get(), expected_guide.get());
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const auto actual   = &actual_guide[width * 3 * y + x * 3];
+            const auto expected = &expected_guide[width * 3 * y + x * 3];
+            EXPECT_EQ(actual[0], expected[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_EQ(actual[1], expected[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_EQ(actual[2], expected[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+        }
+    }
+}
+
+TEST(BilateralTextureFilterTest, CudaComputeBlurAndRTV) {
     constexpr auto width  = 50;
     constexpr auto height = 50;
 
@@ -172,7 +244,7 @@ TEST(BilateralTextureFilterTest, ComputeBlurAndRTV) {
     }
 }
 
-TEST(BilateralTextureFilterTest, ComputeGuide) {
+TEST(BilateralTextureFilterTest, CudaComputeGuide) {
     constexpr auto width  = 50;
     constexpr auto height = 50;
 

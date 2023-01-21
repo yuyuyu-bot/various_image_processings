@@ -35,7 +35,7 @@ void ref_gradient(const SrcType* const src, float* const dst, const int width, c
 
 struct GradientTest : ::testing::TestWithParam<int> {};
 
-TEST_P(GradientTest, cpp_random_u8) {
+TEST_P(GradientTest, CppRandomU8) {
     cv::setNumThreads(1);
     using SrcType = std::uint8_t;
     constexpr auto width  = 50;
@@ -61,7 +61,7 @@ TEST_P(GradientTest, cpp_random_u8) {
     }
 }
 
-TEST_P(GradientTest, cpp_random_f32) {
+TEST_P(GradientTest, CppRandomF32) {
     using SrcType = float;
     constexpr auto width  = 50;
     constexpr auto height = 50;
@@ -86,7 +86,7 @@ TEST_P(GradientTest, cpp_random_f32) {
     }
 }
 
-TEST_P(GradientTest, cuda_random_u8) {
+TEST_P(GradientTest, CudaRandomU8) {
     using SrcType = std::uint8_t;
     constexpr auto width  = 50;
     constexpr auto height = 50;
@@ -113,7 +113,7 @@ TEST_P(GradientTest, cuda_random_u8) {
     }
 }
 
-TEST_P(GradientTest, cuda_random_f32) {
+TEST_P(GradientTest, CudaRandomF32) {
     using SrcType = float;
     constexpr auto width  = 50;
     constexpr auto height = 50;

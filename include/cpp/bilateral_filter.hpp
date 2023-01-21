@@ -136,18 +136,18 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
           height_(src.rows),
           radius_(radius) {
             const auto ksize = radius_ * 2 + 1;
-            const auto&& [kernel_space, kernel_color_table] = pre_compute_kernels(ksize, sigma_space, sigma_color);
+            std::tie(kernel_space_, kernel_color_table_) = pre_compute_kernels(ksize, sigma_space, sigma_color);
 
-            get_kernel_space_ = [ksize, radius, &kernel_space](const int kx, const int ky) {
-                return kernel_space[(ky + radius) * ksize + (kx + radius)];
+            get_kernel_space_ = [ksize, this](const int kx, const int ky) {
+                return kernel_space_[(ky + radius_) * ksize + (kx + radius_)];
             };
 
-            get_kernel_color_ = [&kernel_color_table](const cv::Vec3b& a, const cv::Vec3b& b) {
+            get_kernel_color_ = [this](const cv::Vec3b& a, const cv::Vec3b& b) {
                 const auto diff0 = static_cast<int>(a[0]) - static_cast<int>(b[0]);
                 const auto diff1 = static_cast<int>(a[1]) - static_cast<int>(b[1]);
                 const auto diff2 = static_cast<int>(a[2]) - static_cast<int>(b[2]);
                 const auto color_distance = std::abs(diff0) + std::abs(diff1) + std::abs(diff2);
-                return kernel_color_table[color_distance];
+                return kernel_color_table_[color_distance];
             };
         }
 
@@ -189,6 +189,8 @@ inline void joint_bilateral_filter(const cv::Mat3b& src, const cv::Mat3b& guide,
         const int height_;
         const int radius_;
 
+        std::vector<float> kernel_space_;
+        std::array<float, 256 * 3> kernel_color_table_;
         std::function<float(int, int)> get_kernel_space_;
         std::function<float(cv::Vec3b, cv::Vec3b)> get_kernel_color_;
     };
