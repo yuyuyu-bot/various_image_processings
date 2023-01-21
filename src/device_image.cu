@@ -48,4 +48,5 @@ ElemType* DeviceImage<ElemType>::get() {
     return impl_->get();
 }
 
-template class DeviceImage<::std::uint8_t>;
+template class DeviceImage<std::uint8_t>;
+template class DeviceImage<float>;

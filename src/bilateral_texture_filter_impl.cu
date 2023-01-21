@@ -1,6 +1,7 @@
 #include <thrust/host_vector.h>
 
 #include "bilateral_texture_filter_impl.cuh"
+#include "cuda/gradient.hpp"
 #include "device_utilities.cuh"
 #include "host_utilities.hpp"
 
@@ -256,7 +257,7 @@ void CudaBilateralTextureFilter::Impl::execute(
 
     for (int itr = 0; itr < nitr_; itr++) {
         thrust::copy(d_dst_n_.begin(), d_dst_n_.end(), d_src_n_.begin());
-        compute_magnitude(d_src_n_, d_magnitude_);
+        cuda_gradient(d_src_n_.data().get(), d_magnitude_.data().get(), width_, height_, 3);
         compute_blur_and_rtv(d_src_n_, d_magnitude_, d_blurred_, d_rtv_);
         compute_guide(d_blurred_, d_rtv_, d_guide_);
         jbf_executor_.joint_bilateral_filter(d_src_n_.data().get(), d_guide_.data().get(), d_dst_n_.data().get());
