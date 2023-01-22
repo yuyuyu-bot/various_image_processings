@@ -4,7 +4,6 @@
 
 #include <cstdint>
 #include <cmath>
-#include <iostream>
 #include <opencv2/core.hpp>
 
 namespace {

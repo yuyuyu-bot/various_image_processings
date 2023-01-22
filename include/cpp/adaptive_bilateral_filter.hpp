@@ -5,68 +5,10 @@
 #include <cmath>
 #include <opencv2/core.hpp>
 
+#include "border_replicated_integral_image.hpp"
 #include "bilateral_filter.hpp"
 
 namespace {
-
-namespace internal {
-
-class IntegralImage {
-public:
-    IntegralImage(
-        const cv::Mat3b& src,
-        const int radius)
-    : width_(src.cols + radius * 2 + 1),
-      height_(src.rows + radius * 2 + 1),
-      radius_(radius) {
-        const int dim[3] = { height_, width_, channels_};
-        buffer_.create(src.dims, dim);
-        buffer_.setTo(cv::Scalar::all(0));
-
-        for (int y = 1; y < height_; y++) {
-            for (int x = 1; x < width_; x++) {
-                const auto src_x = std::clamp(x - 1 - radius, 0, src.cols - 1);
-                const auto src_y = std::clamp(y - 1 - radius, 0, src.rows - 1);
-
-                for (int ch = 0; ch < channels_; ch++) {
-                    buffer_.at<cv::Vec3i>(y, x)[ch] = src.at<cv::Vec3b>(src_y, src_x)[ch];
-                }
-            }
-        }
-
-        for (int y = 1; y < height_; y++) {
-            for (int x = 0; x < width_; x++) {
-                for (int ch = 0; ch < channels_; ch++) {
-                    buffer_.at<cv::Vec3i>(y, x)[ch] += buffer_.at<cv::Vec3i>(y - 1, x)[ch];
-                }
-            }
-        }
-
-        for (int y = 0; y < height_; y++) {
-            for (int x = 1; x < width_; x++) {
-                for (int ch = 0; ch < channels_; ch++) {
-                    buffer_.at<cv::Vec3i>(y, x)[ch] += buffer_.at<cv::Vec3i>(y, x - 1)[ch];
-                }
-            }
-        }
-    }
-
-    auto get(const int x0, const int y0, const int x1, const int y1) const {
-        return buffer_.at<cv::Vec3i>(y1 + radius_ + 1, x1 + radius_ + 1) -
-               buffer_.at<cv::Vec3i>(y1 + radius_ + 1, x0 + radius_    ) -
-               buffer_.at<cv::Vec3i>(y0 + radius_    , x1 + radius_ + 1) +
-               buffer_.at<cv::Vec3i>(y0 + radius_    , x0 + radius_    );
-    }
-
-private:
-    static constexpr int channels_ = 3;
-    const int width_;
-    const int height_;
-    const int radius_;
-    cv::Mat3i buffer_;
-};
-
-} // namespace internal
 
 inline void adaptive_bilateral_filter(
     const cv::Mat3b& src,
@@ -146,7 +88,7 @@ inline void adaptive_bilateral_filter(
         const int ksize_;
         const int radius_;
 
-        const internal::IntegralImage src_integral_;
+        const BorderReplicatedIntegralImage<std::uint8_t, 3> src_integral_;
         std::vector<float> kernel_space_;
         std::array<float, 512 * 3> kernel_color_table_;
         std::function<float(int, int)> get_kernel_space_;

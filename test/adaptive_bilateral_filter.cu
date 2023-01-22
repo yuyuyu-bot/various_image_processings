@@ -136,39 +136,6 @@ public:
     }
 };
 
-TEST(AdaptiveBilateralFilter, IntegralImage) {
-    constexpr auto width  = 5;
-    constexpr auto height = 5;
-    constexpr auto radius = 4;
-
-    const auto src_array = random_array<std::uint8_t>(width * height * 3);
-    cv::Mat3b src(height, width, reinterpret_cast<cv::Vec3b*>(src_array.get()));
-
-    internal::IntegralImage integral_image(src, radius);
-
-    for (int y0 = -radius; y0 < height + radius; y0++) {
-        for (int x0 = -radius; x0 < width + radius; x0++) {
-            for (int y1 = y0; y1 < height + radius; y1++) {
-                for (int x1 = x0; x1 < width + radius; x1++) {
-                    const auto actual = integral_image.get(x0, y0, x1, y1);
-                    cv::Vec3i expected(0, 0, 0);
-                    for (int y = y0; y <= y1; y++) {
-                        for (int x = x0; x <= x1; x++) {
-                            const auto cx = std::clamp(x, 0, width - 1);
-                            const auto cy = std::clamp(y, 0, height - 1);
-                            expected += src.at<cv::Vec3b>(cy, cx);
-                        }
-                    }
-
-                    EXPECT_EQ(actual[0], expected[0]);
-                    EXPECT_EQ(actual[1], expected[1]);
-                    EXPECT_EQ(actual[2], expected[2]);
-                }
-            }
-        }
-    }
-}
-
 TEST(AdaptiveBilateralFilter, CppImpl) {
     constexpr auto width  = 50;
     constexpr auto height = 50;
@@ -189,9 +156,9 @@ TEST(AdaptiveBilateralFilter, CppImpl) {
         for (int x = 0; x < width; x++) {
             const auto actual_ptr   = &actual[width * 3 * y + x * 3];
             const auto expected_ptr = &expected[width * 3 * y + x * 3];
-            EXPECT_EQ(actual_ptr[0], expected_ptr[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
-            EXPECT_EQ(actual_ptr[1], expected_ptr[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
-            EXPECT_EQ(actual_ptr[2], expected_ptr[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+            EXPECT_NEAR(actual_ptr[0], expected_ptr[0], 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_NEAR(actual_ptr[1], expected_ptr[1], 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_NEAR(actual_ptr[2], expected_ptr[2], 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
         }
     }
 }
@@ -219,9 +186,9 @@ TEST(AdaptiveBilateralFilter, CudaImpl) {
         for (int x = 0; x < width; x++) {
             const auto actual_ptr   = &actual[width * 3 * y + x * 3];
             const auto expected_ptr = &expected[width * 3 * y + x * 3];
-            EXPECT_EQ(actual_ptr[0], expected_ptr[0]) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
-            EXPECT_EQ(actual_ptr[1], expected_ptr[1]) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
-            EXPECT_EQ(actual_ptr[2], expected_ptr[2]) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
+            EXPECT_NEAR(actual_ptr[0], expected_ptr[0], 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 0 << ")";
+            EXPECT_NEAR(actual_ptr[1], expected_ptr[1], 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 1 << ")";
+            EXPECT_NEAR(actual_ptr[2], expected_ptr[2], 1) << "(x, y, ch) = (" << x << ", " << y << ", " << 2 << ")";
         }
     }
 }

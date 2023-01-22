@@ -165,12 +165,15 @@ __global__ void compute_guide_kernel(
     }
 
     const auto alpha = 2 / (1 + exp(sigma_alpha * (*get_s_rtv_ptr(x, y) - *get_s_rtv_ptr(rtv_min_x, rtv_min_y)))) - 1.f;
-    guide[stride_3ch * y + x * 3 + 0] =      alpha  * blurred[stride_3ch * rtv_min_y + rtv_min_x * 3 + 0] +
-                                        (1 - alpha) * blurred[stride_3ch * y + x * 3 + 0];
-    guide[stride_3ch * y + x * 3 + 1] =      alpha  * blurred[stride_3ch * rtv_min_y + rtv_min_x * 3 + 1] +
-                                        (1 - alpha) * blurred[stride_3ch * y + x * 3 + 1];
-    guide[stride_3ch * y + x * 3 + 2] =      alpha  * blurred[stride_3ch * rtv_min_y + rtv_min_x * 3 + 2] +
-                                        (1 - alpha) * blurred[stride_3ch * y + x * 3 + 2];
+    guide[stride_3ch * y + x * 3 + 0] = clamp<int>(     alpha  * blurred[stride_3ch * rtv_min_y + rtv_min_x * 3 + 0] +
+                                                   (1 - alpha) * blurred[stride_3ch * y + x * 3 + 0] + 0.5f,
+                                                   0, 255);
+    guide[stride_3ch * y + x * 3 + 1] = clamp<int>(     alpha  * blurred[stride_3ch * rtv_min_y + rtv_min_x * 3 + 1] +
+                                                   (1 - alpha) * blurred[stride_3ch * y + x * 3 + 1] + 0.5f,
+                                                   0, 255);
+    guide[stride_3ch * y + x * 3 + 2] = clamp<int>(     alpha  * blurred[stride_3ch * rtv_min_y + rtv_min_x * 3 + 2] +
+                                                   (1 - alpha) * blurred[stride_3ch * y + x * 3 + 2] + 0.5f,
+                                                   0, 255);
 }
 
 CudaBilateralTextureFilter::Impl::Impl(

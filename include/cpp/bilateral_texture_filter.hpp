@@ -3,9 +3,7 @@
 
 #include <cstdint>
 #include <cmath>
-#include <iostream>
 #include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
 #include <opencv2/ximgproc/edge_filter.hpp>
 
 #include "gradient.hpp"
@@ -115,12 +113,15 @@ public:
 
         const auto alpha =
             2 / (1 + std::exp(sigma_alpha * (rtv.at<float>(y, x) - rtv.at<float>(rtv_min_y, rtv_min_x)))) - 1.f;
-        guide.at<cv::Vec3b>(y, x)[0] =      alpha  * blurred.at<cv::Vec3f>(rtv_min_y, rtv_min_x)[0] +
-                                        (1 - alpha) * blurred.at<cv::Vec3f>(y, x)[0];
-        guide.at<cv::Vec3b>(y, x)[ 1] =     alpha  * blurred.at<cv::Vec3f>(rtv_min_y, rtv_min_x)[1] +
-                                        (1 - alpha) * blurred.at<cv::Vec3f>(y, x)[1];
-        guide.at<cv::Vec3b>(y, x)[2] =      alpha  * blurred.at<cv::Vec3f>(rtv_min_y, rtv_min_x)[2] +
-                                        (1 - alpha) * blurred.at<cv::Vec3f>(y, x)[2];
+        guide.at<cv::Vec3b>(y, x)[0] = std::clamp<int>(     alpha  * blurred.at<cv::Vec3f>(rtv_min_y, rtv_min_x)[0] +
+                                                       (1 - alpha) * blurred.at<cv::Vec3f>(y, x)[0] + 0.5f,
+                                                       0, 255);
+        guide.at<cv::Vec3b>(y, x)[ 1] = std::clamp<int>(    alpha  * blurred.at<cv::Vec3f>(rtv_min_y, rtv_min_x)[1] +
+                                                        (1 - alpha) * blurred.at<cv::Vec3f>(y, x)[1] + 0.5f,
+                                                       0, 255);
+        guide.at<cv::Vec3b>(y, x)[2] =  std::clamp<int>(    alpha  * blurred.at<cv::Vec3f>(rtv_min_y, rtv_min_x)[2] +
+                                                        (1 - alpha) * blurred.at<cv::Vec3f>(y, x)[2] + 0.5f,
+                                                       0, 255);
     }
 
     void operator()(const cv::Range& range) const CV_OVERRIDE {

@@ -67,7 +67,7 @@ TEST_P(GradientTest, CppRandomF32) {
     constexpr auto height = 50;
     const auto src_ch = GetParam();
 
-    const auto input_array = random_array<SrcType>(width * height * src_ch);
+    const auto input_array = random_array<SrcType>(width * height * src_ch, 255);
     const auto actual_array = std::make_unique<float[]>(width * height);
     const auto expected_array = std::make_unique<float[]>(width * height);
 
@@ -119,7 +119,7 @@ TEST_P(GradientTest, CudaRandomF32) {
     constexpr auto height = 50;
     const auto src_ch = GetParam();
 
-    const auto input_array = random_array<SrcType>(width * height * src_ch);
+    const auto input_array = random_array<SrcType>(width * height * src_ch, 255);
     const auto actual_array = std::make_unique<float[]>(width * height);
     const auto expected_array = std::make_unique<float[]>(width * height);
     thrust::device_vector<SrcType> d_input_array(width * height * src_ch);
