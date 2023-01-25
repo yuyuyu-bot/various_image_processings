@@ -141,7 +141,7 @@ TEST(BilateralTextureFilterTest, CppComputeBlurAndRTV) {
     constexpr auto ksize  = 9;
 
     const auto input_image      = random_array<std::uint8_t>(width * height * 3);
-    const auto input_magnitude  = random_array<float>(width * height, 255);
+    const auto input_magnitude  = random_array<float>(width * height);
     const auto actual_blurred   = std::make_unique<float[]>(width * height * 3);
     const auto actual_rtv       = std::make_unique<float[]>(width * height);
     const auto expected_blurred = std::make_unique<float[]>(width * height * 3);
@@ -181,7 +181,7 @@ TEST(BilateralTextureFilterTest, CppComputeGuide) {
     constexpr auto height = 50;
     constexpr auto ksize  = 9;
 
-    const auto input_blurred  = random_array<float>(width * height * 3, 255);
+    const auto input_blurred  = random_array<float>(width * height * 3);
     const auto input_rtv      = random_array<float>(width * height, 1);
     const auto actual_guide   = std::make_unique<std::uint8_t[]>(width * height * 3);
     const auto expected_guide = std::make_unique<std::uint8_t[]>(width * height * 3);
@@ -210,7 +210,7 @@ TEST(BilateralTextureFilterTest, CudaComputeBlurAndRTV) {
     constexpr auto height = 50;
 
     const auto input_image      = random_array<std::uint8_t>(width * height * 3);
-    const auto input_magnitude  = random_array<float>(width * height, 255);
+    const auto input_magnitude  = random_array<float>(width * height);
     const auto actual_blurred   = std::make_unique<float[]>(width * height * 3);
     const auto actual_rtv       = std::make_unique<float[]>(width * height);
     const auto expected_blurred = std::make_unique<float[]>(width * height * 3);
@@ -254,7 +254,7 @@ TEST(BilateralTextureFilterTest, CudaComputeGuide) {
     constexpr auto width  = 50;
     constexpr auto height = 50;
 
-    const auto input_blurred  = random_array<float>(width * height * 3, 255);
+    const auto input_blurred  = random_array<float>(width * height * 3);
     const auto input_rtv      = random_array<float>(width * height, 1);
     const auto actual_guide   = std::make_unique<std::uint8_t[]>(width * height * 3);
     const auto expected_guide = std::make_unique<std::uint8_t[]>(width * height * 3);
