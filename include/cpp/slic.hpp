@@ -106,6 +106,7 @@ float CIE_DeltaE2000_square(const int l1, const int a1, const int b1, const int 
         SQUARE(deltaCPrime / (k_C * S_C)) +
         SQUARE(deltaHPrime / (k_H * S_H)) +
         (R_T * (deltaCPrime / (k_C * S_C)) * (deltaHPrime / (k_H * S_H)));
+#undef SQUARE
 
     return deltaE;
 }
