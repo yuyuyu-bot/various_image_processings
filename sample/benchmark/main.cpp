@@ -9,6 +9,7 @@
 #include "cpp/bilateral_filter.hpp"
 #include "cpp/adaptive_bilateral_filter.hpp"
 #include "cpp/bilateral_texture_filter.hpp"
+#include "cpp/slic.hpp"
 
 #include "cuda/device_image.hpp"
 #include "cuda/gradient.hpp"
@@ -50,6 +51,11 @@ struct Parameters {
         int ksize = 9;
         int nitr = 3;
     } BilateralTextureFilter;
+
+    struct {
+        int superpixel_size = 10;
+        int num_iteration = 10;
+    } SuperpixelSLIC;
 };
 
 static auto parse_config(const std::string& filename) {
@@ -73,6 +79,11 @@ static auto parse_config(const std::string& filename) {
     data = toml::find(toml_all, "BilateralTextureFilter");
     params.BilateralTextureFilter.ksize = toml::find<int>(data, "ksize");
     params.BilateralTextureFilter.nitr = toml::find<int>(data, "nitr");
+
+    // superpixel SLIC
+    data = toml::find(toml_all, "SuperpixelSLIC");
+    params.SuperpixelSLIC.superpixel_size = toml::find<int>(data, "superpixel_size");
+    params.SuperpixelSLIC.num_iteration = toml::find<int>(data, "num_iteration");
 
     return params;
 }
@@ -174,6 +185,21 @@ static void bench_bilateral_texture_filter(
     print_duration("bilateral texture filter [cuda]", duration);
 }
 
+static void bench_superpixel_slic(
+    const int measurement_times,
+    const cv::Mat& input_image,
+    const int superpixel_size,
+    const int num_iteration
+) {
+    const cv::Mat3b input_image_color = convert_to_3ch(input_image);
+    cv::Mat1i dst;
+
+    float duration = 0.f;
+
+    MEASURE(measurement_times, superpixel_slic(input_image, dst, superpixel_size, num_iteration), duration);
+    print_duration("superpixel SLIC [cpp]", duration);
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "[Usage] ./benchmark [config_path]" << std::endl;
@@ -184,7 +210,7 @@ int main(int argc, char** argv) {
     constexpr auto width  = 100;
     constexpr auto height = 100;
     cv::Mat3b input_image(height, width);
-    cv::randu(input_image, cv::Scalar::all(0), cv::Scalar::all(256));
+    cv::randu(input_image, cv::Scalar::all(100), cv::Scalar::all(120));
 
     std::cout << "Parameters" << std::endl;
     std::cout << "\twidth         : " << input_image.cols << std::endl;
@@ -194,12 +220,15 @@ int main(int argc, char** argv) {
     std::cout << "\t[adaptive bilateral filter] ksize : " << params.AdaptiveBilateralFilter.ksize << std::endl;
     std::cout << "\t[bilateral texture filter]  ksize : " << params.BilateralTextureFilter.ksize << std::endl;
     std::cout << "\t[bilateral texture filter]  nitr  : " << params.BilateralTextureFilter.nitr << std::endl;
+    std::cout << "\t[superpixel SLIC] superpixel_size : " << params.SuperpixelSLIC.superpixel_size << std::endl;
+    std::cout << "\t[superpixel SLIC] num_iteration   : " << params.SuperpixelSLIC.num_iteration << std::endl;
     std::cout << std::endl;
 
     bench_gradient(params.execute_times, input_image);
     bench_bilateral_filter(params.execute_times, input_image, params.BilateralFilter.ksize);
     bench_adaptive_bilateral_filter(params.execute_times, input_image, params.AdaptiveBilateralFilter.ksize);
     bench_bilateral_texture_filter(params.execute_times, input_image, params.BilateralTextureFilter.ksize, params.BilateralTextureFilter.nitr);
+    bench_superpixel_slic(params.execute_times, input_image, params.SuperpixelSLIC.superpixel_size, params.SuperpixelSLIC.num_iteration);
 
     return 0;
 }

@@ -1,4 +1,4 @@
-execute_times = 50
+execute_times = 10
 
 [BilateralFilter]
 ksize = 9
@@ -9,3 +9,7 @@ ksize = 9
 [BilateralTextureFilter]
 ksize = 9
 nitr  = 3
+
+[SuperpixelSLIC]
+superpixel_size = 10
+num_iteration   = 10

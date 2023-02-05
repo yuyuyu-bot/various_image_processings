@@ -71,27 +71,17 @@ int main(int argc, char** argv) {
     }
 
     cv::Mat image = cv::imread(argv[1]);
+    cv::Mat1i label;
 
-    const int superpixel_size = 30;
-    const int iterate = 10;
-    const float m = 20.f;
+    const auto superpixel_size = 30;
+    const auto iterate = 10;
+    const auto m = 20.f;
 
-    // set SLIC parameters
-    SLIC::Parameters param;
-    param.superpixel_size = superpixel_size;
-    param.iterate = iterate;
-    param.color_scale = m;
-    // create SLIC
-    SLIC slic(image.rows, image.cols, param);
-    // perform SLIC
-    slic.apply(image);
+    superpixel_slic(image, label, superpixel_size, iterate, m);
 
-    cv::Mat labels;
-    slic.getLabels(labels);
-
-    cv::imshow("Superpixel image", draw_superpixel(image, labels));
-    image.setTo(cv::Scalar(0, 0, 255), draw_contour(labels));
-    cv::imshow("Superpixel contour", image);
+    cv::imshow("superpixel image", draw_superpixel(image, label));
+    image.setTo(cv::Scalar(0, 0, 255), draw_contour(label));
+    cv::imshow("superpixel contour", image);
     cv::waitKey(0);
 
     return 0;
