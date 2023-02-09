@@ -66,7 +66,7 @@ static cv::Mat3b draw_superpixel(const cv::Mat3b& image, const cv::Mat1i& labels
 
 int main(int argc, char** argv) {
     if (argc != 2) {
-        std::cout << "Usage: ./slic.exe [image]" << std::endl;
+        std::cout << "Usage: ./slic [image]" << std::endl;
         exit(EXIT_FAILURE);
     }
 
