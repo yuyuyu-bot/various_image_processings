@@ -216,12 +216,21 @@ int main(int argc, char** argv) {
     std::cout << "\twidth         : " << input_image.cols << std::endl;
     std::cout << "\theight        : " << input_image.rows << std::endl;
     std::cout << "\texecute times : " << params.execute_times << std::endl;
-    std::cout << "\t[bilateral filter]          ksize : " << params.BilateralFilter.ksize << std::endl;
-    std::cout << "\t[adaptive bilateral filter] ksize : " << params.AdaptiveBilateralFilter.ksize << std::endl;
-    std::cout << "\t[bilateral texture filter]  ksize : " << params.BilateralTextureFilter.ksize << std::endl;
-    std::cout << "\t[bilateral texture filter]  nitr  : " << params.BilateralTextureFilter.nitr << std::endl;
-    std::cout << "\t[superpixel SLIC] superpixel_size : " << params.SuperpixelSLIC.superpixel_size << std::endl;
-    std::cout << "\t[superpixel SLIC] num_iteration   : " << params.SuperpixelSLIC.num_iteration << std::endl;
+    std::cout << std::endl;
+
+    std::cout << "\t[bilateral filter]" << std::endl;
+    std::cout << "\t\tksize : " << params.BilateralFilter.ksize << std::endl;
+
+    std::cout << "\t[adaptive bilateral filter]" << std::endl;
+    std::cout << "\t\tksize : " << params.AdaptiveBilateralFilter.ksize << std::endl;
+
+    std::cout << "\t[bilateral texture filter]" << std::endl;
+    std::cout << "\t\tksize : " << params.BilateralTextureFilter.ksize << std::endl;
+    std::cout << "\t\tnitr  : " << params.BilateralTextureFilter.nitr << std::endl;
+
+    std::cout << "\t[superpixel SLIC]" << std::endl;
+    std::cout << "\t\tsuperpixel_size : " << params.SuperpixelSLIC.superpixel_size << std::endl;
+    std::cout << "\t\tnum_iteration   : " << params.SuperpixelSLIC.num_iteration << std::endl;
     std::cout << std::endl;
 
     bench_gradient(params.execute_times, input_image);
