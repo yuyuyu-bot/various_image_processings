@@ -20,13 +20,13 @@ public:
     };
 
     SplitAndMerge(const cv::Mat3b& image, const Parameters& param)
-    : rows_(image.rows), cols_(image.cols), param_(param), label_(image.rows, image.cols), num_label_(0) {
+    : height_(image.rows), width_(image.cols), param_(param), label_(image.rows, image.cols), num_label_(0) {
         label_.setTo(-1);
         cv::cvtColor(image, gray_, cv::COLOR_BGR2GRAY);
     }
 
     void apply() {
-        split(0, 0, cols_ - 1, rows_ - 1);
+        split(0, 0, width_ - 1, height_ - 1);
         compute_block_info();
         merge();
         absorb();
@@ -37,13 +37,13 @@ public:
     }
 
 private:
-    struct mergeResources {
+    struct BlockInformation {
         std::vector<float> intensity_average;
         std::vector<int> size;
         std::vector<cv::Point> begin;
         std::vector<cv::Point> end;
 
-        mergeResources(const int label_num)
+        BlockInformation(const int label_num)
         : intensity_average(label_num, 0.f), size(label_num, 0), begin(label_num), end(label_num) {
         }
     };
@@ -142,36 +142,36 @@ private:
     }
 
     void compute_block_info() {
-        resources_ = std::unique_ptr<mergeResources>(new mergeResources(num_label_));
+        block_info_ = std::unique_ptr<BlockInformation>(new BlockInformation(num_label_));
 
-        for (int y = 0; y < rows_; y++) {
-            for (int x = 0; x < cols_; x++) {
+        for (int y = 0; y < height_; y++) {
+            for (int x = 0; x < width_; x++) {
                 const int l = label_.ptr<int>(y)[x];
-                if (resources_->size[l] == 0) {
-                    resources_->begin[l] = { x, y };
+                if (block_info_->size[l] == 0) {
+                    block_info_->begin[l] = { x, y };
                 }
 
-                resources_->end[l] = { x, y };
-                resources_->intensity_average[l] += gray_(y, x);
-                resources_->size[l]++;
+                block_info_->end[l] = { x, y };
+                block_info_->intensity_average[l] += gray_(y, x);
+                block_info_->size[l]++;
             }
         }
 
         for (int i = 0; i < num_label_; i++) {
-            if (resources_->size[i] > 0) {
-                resources_->intensity_average[i] /= static_cast<float>(resources_->size[i]);
+            if (block_info_->size[i] > 0) {
+                block_info_->intensity_average[i] /= static_cast<float>(block_info_->size[i]);
             }
         }
     }
 
     bool is_combinable(const int a, const int b) const {
-        return std::abs(resources_->intensity_average[a] - resources_->intensity_average[b]) < param_.merge_thresh;
+        return std::abs(block_info_->intensity_average[a] - block_info_->intensity_average[b]) < param_.merge_thresh;
     }
 
     void relabel(int a, int b) {
         int small;
         int large;
-        if (resources_->size[a] < resources_->size[b]) {
+        if (block_info_->size[a] < block_info_->size[b]) {
             small = a;
             large = b;
         }
@@ -181,8 +181,8 @@ private:
         }
 
         // overwrite the label
-        for (int y = resources_->begin[small].y; y <= resources_->end[small].y; y++) {
-            for (int x = 0; x < cols_; x++) {
+        for (int y = block_info_->begin[small].y; y <= block_info_->end[small].y; y++) {
+            for (int x = 0; x < width_; x++) {
                 if (label_.ptr<int>(y)[x] == small) {
                     label_.ptr<int>(y)[x] = large;
                 }
@@ -190,39 +190,39 @@ private:
         }
 
         // set new properties
-        const auto new_intensity = resources_->intensity_average[small] * resources_->size[small] +
-                                   resources_->intensity_average[large] * resources_->size[large];
-        const auto new_size = resources_->size[small] + resources_->size[large];
-        resources_->intensity_average[large] = new_intensity / new_size;
-        resources_->size[large] = new_size;
+        const auto new_intensity = block_info_->intensity_average[small] * block_info_->size[small] +
+                                   block_info_->intensity_average[large] * block_info_->size[large];
+        const auto new_size = block_info_->size[small] + block_info_->size[large];
+        block_info_->intensity_average[large] = new_intensity / new_size;
+        block_info_->size[large] = new_size;
 
-        const auto small_begin_index = resources_->begin[small].y * rows_ + resources_->begin[small].x;
-        const auto large_begin_index = resources_->begin[large].y * rows_ + resources_->begin[large].x;
+        const auto small_begin_index = block_info_->begin[small].y * height_ + block_info_->begin[small].x;
+        const auto large_begin_index = block_info_->begin[large].y * height_ + block_info_->begin[large].x;
         if (small_begin_index < large_begin_index) {
-            resources_->begin[large] = resources_->begin[small];
+            block_info_->begin[large] = block_info_->begin[small];
         }
 
-        const auto small_end_index = resources_->end[small].y * rows_ + resources_->end[small].x;
-        const auto large_end_idnex = resources_->end[large].y * rows_ + resources_->end[large].x;
+        const auto small_end_index = block_info_->end[small].y * height_ + block_info_->end[small].x;
+        const auto large_end_idnex = block_info_->end[large].y * height_ + block_info_->end[large].x;
         if (small_end_index > large_end_idnex) {
-            resources_->end[large] = resources_->end[small];
+            block_info_->end[large] = block_info_->end[small];
         }
 
         // invalidate small block
-        resources_->intensity_average[small] = 0.f;
-        resources_->size[small] = 0;
-        resources_->begin[small] = resources_->end[small] = { 0, 0 };
+        block_info_->intensity_average[small] = 0.f;
+        block_info_->size[small] = 0;
+        block_info_->begin[small] = block_info_->end[small] = { 0, 0 };
     }
 
     void merge() {
         int merged_count;
         do {
             merged_count = 0;
-            for (int y = 0; y < rows_; y++) {
-                for (int x = 0; x < cols_; x++) {
+            for (int y = 0; y < height_; y++) {
+                for (int x = 0; x < width_; x++) {
                     int center = label_(y, x);
 
-                    if (x + 1 < cols_) {
+                    if (x + 1 < width_) {
                         int right = label_(y, x + 1);
                         if (center != right && is_combinable(center, right)) {
                             relabel(center, right);
@@ -233,7 +233,7 @@ private:
                     }
 
 
-                    if (y + 1 < rows_) {
+                    if (y + 1 < height_) {
                         int down = label_(y + 1, x);
                         if (center != down && is_combinable(center, down)) {
                             relabel(center, down);
@@ -246,23 +246,27 @@ private:
     }
 
     int trace_contour(int target) {
-        cv::Point begin = resources_->begin[target];
+        cv::Point begin = block_info_->begin[target];
         begin.x -= 1;
         cv::Point curr = begin;
-        int from = 0, to, n = 0;
-        int vec = 2;
-        int answer = 0;
-        float sub, min = 256.f;
 
-        const auto x_isValid = [this](const int x) { return (x >= 0 && x < cols_); };
-        const auto y_isValid = [this](const int y) { return (y >= 0 && y < rows_); };
+        int   from = 0;
+        int   to;
+        int   n = 0;
+        int   vec = 2;
+        int   answer = 0;
+        float sub;
+        float min = 256.f;
+
+        const auto x_isValid = [this](const int x) { return (x >= 0 && x < width_); };
+        const auto y_isValid = [this](const int y) { return (y >= 0 && y < height_); };
 
         while (true) {
             if (n != 0 && curr == begin) {
                 return answer;
             }
 
-            if (n > rows_ * cols_) {
+            if (n > height_ * width_) {
                 // stuck in an infinite loop ?
                 return -1;
             }
@@ -349,7 +353,7 @@ private:
             }
 
             if (from != 0) {
-                sub = std::abs(resources_->intensity_average[target] - resources_->intensity_average[from]);
+                sub = std::abs(block_info_->intensity_average[target] - block_info_->intensity_average[from]);
                 if (sub < min) {
                     min = sub;
                     answer = from;
@@ -369,7 +373,7 @@ private:
         do {
             absorbed_count = 0;
             for (int i = 0; i < num_label_; i++) {
-                if (resources_->size[i] > 0 && resources_->size[i] < param_.minimum_label_size) {
+                if (block_info_->size[i] > 0 && block_info_->size[i] < param_.minimum_label_size) {
                     const int neighbor = trace_contour(i);
                     if (neighbor >= 0) {
                         relabel(i, neighbor);
@@ -381,15 +385,16 @@ private:
     }
 
 private:
-    static constexpr auto RANGE_U8 = 256;
+    static constexpr auto RANGE_U8 = std::numeric_limits<std::uint8_t>::max();
 
     cv::Mat1b gray_;
     cv::Mat1i label_;
 
     Parameters param_;
-    std::unique_ptr<mergeResources> resources_;
+    std::unique_ptr<BlockInformation> block_info_;
 
-    int rows_, cols_;
+    int width_;
+    int height_;
     int num_label_;
 };
 
