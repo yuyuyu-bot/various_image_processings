@@ -31,15 +31,13 @@ static cv::Mat1b draw_contour(const cv::Mat1i& labels) {
 int main(int argc, char** argv) {
     if (argc != 2) {
         std::cout << "Usage: ./split_and_merge [image]" << std::endl;
-        exit(EXIT_FAILURE);
+        std::exit(EXIT_FAILURE);
     }
 
     cv::Mat image = cv::imread(argv[1]);
     cv::Mat1i label;
 
-    SplitAndMerge splitAndMerge(image, SplitAndMerge::Parameters());
-    splitAndMerge.apply();
-    splitAndMerge.get_labels(label);
+    split_and_merge(image, label);
 
     image.setTo(cv::Scalar(0, 0, 255), draw_contour(label));
     cv::imshow("superpixel contour", image);

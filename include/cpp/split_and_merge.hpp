@@ -7,7 +7,7 @@
 #include <cmath>
 #include <cstring>
 
-class SplitAndMerge {
+class SplitAndMergeImpl {
 public:
     struct Parameters {
         float split_thresh;
@@ -19,7 +19,7 @@ public:
         }
     };
 
-    SplitAndMerge(const cv::Mat3b& image, const Parameters& param)
+    SplitAndMergeImpl(const cv::Mat3b& image, const Parameters& param)
     : height_(image.rows), width_(image.cols), param_(param), label_(image.rows, image.cols), num_label_(0) {
         label_.setTo(-1);
         cv::cvtColor(image, gray_, cv::COLOR_BGR2GRAY);
@@ -397,5 +397,21 @@ private:
     int height_;
     int num_label_;
 };
+
+namespace {
+
+void split_and_merge(
+    const cv::Mat3b& image,
+    cv::Mat1i& label,
+    const float split_thresh = 0.99f,
+    const float merge_thresh = 5.f,
+    const int minimum_label_size = 64
+) {
+    SplitAndMergeImpl impl(image, SplitAndMergeImpl::Parameters(split_thresh, merge_thresh, minimum_label_size));
+    impl.apply();
+    impl.get_labels(label);
+}
+
+} // anonymous namespace
 
 #endif // SPLIT_AND_MERGE_HPP
