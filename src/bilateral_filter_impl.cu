@@ -286,12 +286,10 @@ CudaBilateralFilter::CudaBilateralFilter(
     const float sigma_space,
     const float sigma_color
 ) {
-    impl_ = new CudaBilateralFilter::Impl(width, height, ksize, sigma_space, sigma_color);
+    impl_ = std::make_unique<CudaBilateralFilter::Impl>(width, height, ksize, sigma_space, sigma_color);
 }
 
-CudaBilateralFilter::~CudaBilateralFilter() {
-    delete impl_;
-}
+CudaBilateralFilter::~CudaBilateralFilter() = default;
 
 void CudaBilateralFilter::bilateral_filter(
     const std::uint8_t* const d_src,

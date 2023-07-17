@@ -2,6 +2,7 @@
 #define CUDA_ADAPTIVE_BILATERAL_FILTER_HPP
 
 #include <cstdint>
+#include <memory>
 
 class CudaAdaptiveBilateralFilter {
 public:
@@ -19,7 +20,7 @@ public:
 
 protected:
     class Impl;
-    Impl* impl_;
+    std::unique_ptr<Impl> impl_;
 };
 
 #endif // CUDA_ADAPTIVE_BILATERAL_FILTER_HPP

@@ -261,12 +261,10 @@ CudaBilateralTextureFilter::CudaBilateralTextureFilter(
     const int ksize,
     const int nitr
 ) {
-    impl_ = new CudaBilateralTextureFilter::Impl(width, height, ksize, nitr);
+    impl_ = std::make_unique<CudaBilateralTextureFilter::Impl>(width, height, ksize, nitr);
 }
 
-CudaBilateralTextureFilter::~CudaBilateralTextureFilter() {
-    delete impl_;
-}
+CudaBilateralTextureFilter::~CudaBilateralTextureFilter() = default;
 
 void CudaBilateralTextureFilter::execute(
     const std::uint8_t* const d_src,

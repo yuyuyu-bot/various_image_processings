@@ -2,6 +2,7 @@
 #define CUDA_BILATERAL_TEXTURE_FILTER_CUH
 
 #include <cstdint>
+#include <memory>
 
 class CudaBilateralTextureFilter {
 public:
@@ -12,7 +13,7 @@ public:
 
 protected:
     class Impl;
-    Impl* impl_;
+    std::unique_ptr<Impl> impl_;
 };
 
 #endif // CUDA_BILATERAL_TEXTURE_FILTER_CUH
